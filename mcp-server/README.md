@@ -102,6 +102,42 @@ The eight tools are `list_connections`, `list_tables`, `describe_table`, `search
 read-only, and the server's instructions tell the model that text coming out of a database is data,
 never instructions.
 
+## Serving over HTTP with OAuth 2.1
+
+For anything shared, run the Streamable HTTP transport. It is an OAuth 2.1 **resource server**: it
+never issues tokens, it only checks the ones it is handed, and the identity provider (Keycloak in the
+compose file) is a separate service.
+
+```bash
+python -m mcp_sql_server --transport http
+```
+
+What it does:
+
+- A request with no token gets `401` and a `WWW-Authenticate` header pointing at
+  `/.well-known/oauth-protected-resource`, which names the authorization server. MCP clients follow
+  that to log the user in (authorization code flow with PKCE, which the identity provider enforces).
+- Tokens are checked locally against the provider's published signing keys: signature, expiry,
+  issuer, and **audience**. A token minted for some other service is refused, even if it is otherwise
+  valid, so it can't be replayed here. Only asymmetric algorithms are accepted (no `none`, no `HS*`).
+  If the provider can't be reached, new tokens are refused rather than waved through.
+- The token's subject and roles become the caller the services authorize and audit, so a person has
+  the same permissions here as in the admin GUI. Tool arguments can't change who the caller is.
+- It is **stateless**: no session lives in the process, so replicas can sit behind a load balancer
+  with no sticky sessions. `/healthz` is public and only says the process is up.
+
+Settings (all `MCP_`-prefixed environment variables):
+
+| Variable | Meaning |
+|---|---|
+| `PUBLIC_URL` | The address clients use, e.g. `https://mcp.example.com/mcp`. This is the resource identifier. |
+| `OAUTH_ISSUER` | The identity provider's issuer URL. |
+| `OAUTH_AUDIENCE` | What the token's `aud` must contain. Defaults to `PUBLIC_URL`. |
+| `OAUTH_JWKS_URL` | Where the signing keys are. Found through OpenID discovery if not set. |
+| `OAUTH_ROLES_CLAIM` | Dotted path to the roles in the token. Default `realm_access.roles` (Keycloak). |
+| `OAUTH_REQUIRED_SCOPES` | Comma-separated scopes every token must carry (optional). |
+| `HTTP_HOST`, `HTTP_PORT` | Where to listen. Default `127.0.0.1:8000`. |
+
 ## Tests
 
 Run from the **repo root**:

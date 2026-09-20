@@ -50,3 +50,17 @@ def test_secrets_do_not_show_up_when_settings_are_printed_or_logged(env):
     rendered = repr(Settings()) + str(Settings())
     assert ":pw@" not in rendered
     assert "Fernet" not in rendered
+
+
+def test_the_http_transport_refuses_to_start_without_oauth_settings(env):
+    from mcp_sql_server.server import build_http_auth
+
+    with pytest.raises(ValueError, match="MCP_PUBLIC_URL"):
+        build_http_auth(Settings())  # no public URL or issuer configured
+
+
+def test_oauth_scopes_are_a_comma_separated_list(env, monkeypatch):
+    from mcp_sql_server.config import split_list
+
+    assert split_list("mcp:query, mcp:admin,,") == ["mcp:query", "mcp:admin"]
+    assert split_list("") == []
