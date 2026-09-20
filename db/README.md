@@ -123,6 +123,17 @@ docker exec -e PGPASSWORD=<ORG_READONLY_PASSWORD> mcp-sql-dev-postgres-1 \
   psql -h localhost -U org_readonly -d app_meta -c "select 1"                         # no CONNECT privilege
 ```
 
+## Registering the sample databases
+
+The MCP server finds databases through `app_meta.connections`, so the two sample databases have to be
+registered there. Until the admin GUI exists, a small script does it:
+
+```bash
+cd mcp-server && python -m mcp_sql_server.devtools.seed
+```
+
+See [mcp-server/README.md](../mcp-server/README.md) for what it sets up.
+
 ## Changing the schema
 
 Add a new file under `migrations/versions/` (copy the header from `0001`, bump `revision` and

@@ -16,8 +16,9 @@ Two services that share one Postgres database:
 Work in progress. Done so far:
 
 - [x] Local Postgres + Redis, the `app_meta` schema, and sample data in Postgres and SQLite → see [db/README.md](db/README.md)
+- [x] Database adapter and service layer (permissions, SQL validation, audit, output sanitizing), tested against Postgres and SQLite → see [mcp-server/README.md](mcp-server/README.md)
 
-Next up: the database adapter and service layer, then the MCP tools, then auth, caching and the GUI.
+Next up: the MCP tools on top of the services, then auth, caching and the GUI.
 
 ## Local development
 

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-sql-server"
+version = "0.1.0"
+description = "MCP server that lets LLM agents explore and query SQL databases safely."
+requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "asyncpg>=0.30",        # PostgreSQL: app_meta store and Postgres targets
+    "aiosqlite>=0.20",      # SQLite targets
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.3,<3",
+    "python-dotenv>=1.0",     # dev seed script reads the repo .env
+    "cryptography>=43",     # Fernet encryption of stored connection secrets
+    "sqlglot>=25",          # parses SQL so we know which tables a query touches
+]
+
+[project.optional-dependencies]
+# Extra target engines. Install only what your deployment needs.
+mysql = ["aiomysql>=0.2"]
+mssql = ["aioodbc>=0.5"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "testcontainers>=4.8",
+    "alembic>=1.14,<2",     # integration tests build app_meta with the real migrations
+    "ruff",
+    "mypy>=1.10",
+]
+
+[tool.setuptools.packages.find]
+include = ["mcp_sql_server*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["mcp_sql_server"]
