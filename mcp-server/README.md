@@ -138,6 +138,31 @@ Settings (all `MCP_`-prefixed environment variables):
 | `OAUTH_REQUIRED_SCOPES` | Comma-separated scopes every token must carry (optional). |
 | `HTTP_HOST`, `HTTP_PORT` | Where to listen. Default `127.0.0.1:8000`. |
 
+## Caching (Redis)
+
+Set `MCP_REDIS_URL` and the server caches the lookups that happen on every request. Without it,
+everything still works, just without the speed-up. The cache is an optimisation and is treated as
+one: if Redis is down or slow, requests take the normal path (a short timeout keeps a Redis outage
+from becoming an application outage). Authentication is the opposite and fails closed.
+
+| What | Cached for | How it's keyed |
+|---|---|---|
+| Which connections, tables and tools a caller may use | 60 s | the caller's user id plus roles |
+| Table and column descriptions | 5 min | the connection |
+| Table structure of the target databases (`list_tables`, `describe_table`) | 5 min | the connection and its last edit |
+| Token introspection answers (only in introspection mode) | 60 s, never past the token's expiry | a hash of the token |
+
+Things that make this safe to leave on:
+
+- **No leakage between callers.** Permission answers are keyed by the caller's exact set of grants,
+  and table structure is cached *raw* (the same for everyone) with each caller's permissions applied
+  afterwards on every request. Nothing about who asked ever goes into a cached structure.
+- **Changes are effective immediately.** Every key carries a version number. The admin GUI bumps it
+  after any permission, connection or description change, which makes all old entries unreachable
+  at once, so revoking access doesn't wait for a TTL.
+- **Secrets and data stay out.** Connection secrets, query results and the audit write never go
+  through the cache, and tokens are only ever stored as a hash.
+
 ## Tests
 
 Run from the **repo root**:

@@ -29,6 +29,8 @@ from sqlalchemy.engine import URL
 
 from mcp_sql_server.adapters.base import DBAdapter
 from mcp_sql_server.adapters.sqlalchemy_adapter import SQLAlchemyAdapter
+from mcp_sql_server.cache.base import Cache
+from mcp_sql_server.cache.cached_adapter import CachedAdapter
 from mcp_sql_server.crypto import SecretBox
 from mcp_sql_server.errors import ConnectionUnavailable
 from mcp_sql_server.models import ConnectionRecord
@@ -74,10 +76,16 @@ AdapterFactory = Callable[..., DBAdapter]
 
 class ConnectionRegistry:
     def __init__(
-        self, secret_box: SecretBox, adapter_factory: AdapterFactory = SQLAlchemyAdapter
+        self,
+        secret_box: SecretBox,
+        adapter_factory: AdapterFactory = SQLAlchemyAdapter,
+        cache: Cache | None = None,
+        schema_ttl_s: int = 300,
     ) -> None:
         self._secret_box = secret_box
         self._adapter_factory = adapter_factory
+        self._cache = cache
+        self._schema_ttl_s = schema_ttl_s
         self._adapters: dict[UUID, tuple[datetime, DBAdapter]] = {}
         self._lock = asyncio.Lock()
 
@@ -106,6 +114,11 @@ class ConnectionRegistry:
                 build_engine_url(record, password), schemas=_schemas(record.details)
             )
             await adapter.connect()
+            if self._cache is not None:
+                # Cache table structure per connection *and* per edit of it: changing a
+                # connection in the GUI (new updated_at) starts a fresh set of entries.
+                namespace = f"{record.id}:{record.updated_at.timestamp()}"
+                adapter = CachedAdapter(adapter, self._cache, namespace, self._schema_ttl_s)
         except Exception:
             # The real reason (bad host, wrong password, ...) is for operators, not the LLM.
             # Note: the URL, which contains the password, is deliberately not logged.

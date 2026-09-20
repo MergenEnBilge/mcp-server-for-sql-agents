@@ -2,6 +2,9 @@
 
 from dataclasses import dataclass
 
+from mcp_sql_server.cache.base import Cache
+from mcp_sql_server.cache.cached_meta_store import CachedMetaStore
+from mcp_sql_server.cache.redis_cache import create_cache
 from mcp_sql_server.config import Settings
 from mcp_sql_server.crypto import SecretBox
 from mcp_sql_server.services.audit_service import AuditService
@@ -19,6 +22,7 @@ class Services:
     """Everything the MCP tools need. Holds the connections that must be closed on shutdown."""
 
     store: MetaStore
+    cache: Cache
     registry: ConnectionRegistry
     permissions: PermissionService
     schema: SchemaService
@@ -29,15 +33,28 @@ class Services:
         await self.store.close()
 
 
-def build_services(settings: Settings, store: MetaStore | None = None) -> Services:
+def build_services(
+    settings: Settings, store: MetaStore | None = None, cache: Cache | None = None
+) -> Services:
     limits = settings.query_limits()
-    store = store or PostgresMetaStore.from_url(settings.app_meta_url.get_secret_value())
-    registry = ConnectionRegistry(SecretBox(settings.connection_secret_keys.get_secret_value()))
+    cache = cache or create_cache(settings)
+    store = CachedMetaStore(
+        store or PostgresMetaStore.from_url(settings.app_meta_url.get_secret_value()),
+        cache,
+        permission_ttl_s=settings.permission_cache_ttl_s,
+        description_ttl_s=settings.cache_ttl_s,
+    )
+    registry = ConnectionRegistry(
+        SecretBox(settings.connection_secret_keys.get_secret_value()),
+        cache=cache,
+        schema_ttl_s=settings.cache_ttl_s,
+    )
     permissions = PermissionService(store)
     audit = AuditService(store)
     sanitizer = OutputSanitizer(max_cell_chars=limits.max_cell_chars)
     return Services(
         store=store,
+        cache=cache,
         registry=registry,
         permissions=permissions,
         schema=SchemaService(permissions, registry, audit, sanitizer, store),

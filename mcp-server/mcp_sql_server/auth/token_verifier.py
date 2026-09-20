@@ -25,6 +25,7 @@ import httpx
 import jwt
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
+from mcp_sql_server.cache.base import Cache, NullCache
 from mcp_sql_server.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -142,11 +143,36 @@ def access_token_from_claims(token: str, claims: dict[str, Any], audience: str) 
     )
 
 
-def build_token_verifier(settings: Settings) -> TokenVerifier:
+def build_token_verifier(settings: Settings, cache: Cache | None = None) -> TokenVerifier:
+    """The verifier the settings ask for. `cache` is used by introspection to remember answers."""
     if not settings.oauth_issuer or not settings.public_url:
         raise ValueError("MCP_OAUTH_ISSUER and MCP_PUBLIC_URL are required to verify tokens.")
+    audience = settings.oauth_audience or settings.public_url
+
+    if settings.token_verification == "introspection":
+        from mcp_sql_server.auth.introspection import IntrospectionTokenVerifier
+
+        if not (
+            settings.oauth_introspection_url
+            and settings.oauth_introspection_client_id
+            and settings.oauth_introspection_client_secret
+        ):
+            raise ValueError(
+                "MCP_TOKEN_VERIFICATION=introspection needs MCP_OAUTH_INTROSPECTION_URL, "
+                "MCP_OAUTH_INTROSPECTION_CLIENT_ID and MCP_OAUTH_INTROSPECTION_CLIENT_SECRET."
+            )
+        return IntrospectionTokenVerifier(
+            url=settings.oauth_introspection_url,
+            client_id=settings.oauth_introspection_client_id,
+            client_secret=settings.oauth_introspection_client_secret.get_secret_value(),
+            audience=audience,
+            issuer=settings.oauth_issuer,
+            cache=cache or NullCache(),
+            cache_ttl_s=settings.token_cache_ttl_s,
+        )
+
     return JwtTokenVerifier(
         issuer=settings.oauth_issuer,
-        audience=settings.oauth_audience or settings.public_url,
+        audience=audience,
         jwks_url=settings.oauth_jwks_url,
     )

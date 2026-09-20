@@ -8,6 +8,7 @@ import pytest
 from conftest import ANALYST, OUTSIDER
 from mcp import Client
 
+from mcp_sql_server.cache.base import NullCache
 from mcp_sql_server.container import Services
 from mcp_sql_server.models import Caller, RawResult
 from mcp_sql_server.server import create_server
@@ -46,6 +47,7 @@ def connect(env):
         who = [ANALYST]
         services = Services(
             store=env.store,
+            cache=NullCache(),
             registry=NoRegistry(),  # type: ignore[arg-type]
             permissions=env.permissions,
             schema=env.schema,

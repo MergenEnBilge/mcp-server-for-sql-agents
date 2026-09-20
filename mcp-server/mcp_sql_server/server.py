@@ -22,6 +22,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from mcp_sql_server.auth.caller import CallerProvider, stdio_caller, token_caller
+from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.config import Settings, get_settings, split_list
 from mcp_sql_server.container import Services, build_services
 from mcp_sql_server.tools.mcp_tools import INSTRUCTIONS, register_tools
@@ -72,7 +73,7 @@ def create_server(
 
 
 def build_http_auth(
-    settings: Settings, verifier: TokenVerifier | None = None
+    settings: Settings, verifier: TokenVerifier | None = None, cache: Cache | None = None
 ) -> tuple[AuthSettings, TokenVerifier]:
     """OAuth 2.1 resource-server settings and the verifier for HTTP requests.
 
@@ -92,14 +93,14 @@ def build_http_auth(
         # Our verifier checks the token's audience itself (see token_verifier.py).
         validate_token_resource=False,
     )
-    return auth, verifier or build_token_verifier(settings)
+    return auth, verifier or build_token_verifier(settings, cache)
 
 
 def create_http_app(
     settings: Settings, services: Services, verifier: TokenVerifier | None = None
 ) -> Starlette:
     """The Streamable HTTP application: OAuth-protected MCP endpoint plus public metadata."""
-    auth, verifier = build_http_auth(settings, verifier)
+    auth, verifier = build_http_auth(settings, verifier, services.cache)
     server = create_server(
         services, token_caller(settings.oauth_roles_claim), auth=auth, token_verifier=verifier
     )
