@@ -10,7 +10,8 @@ select = ["E", "F", "I", "B", "UP", "ISC"]
 [lint.per-file-ignores]
 # Migrations are mostly SQL text; wrapping it to 100 columns makes it harder to read.
 "db/migrations/versions/*.py" = ["E501"]
+"gui-backend/gui_backend/routers/*.py" = ["E501"]  # long SQL lines; wrapping them hurts readability
 "tests/**" = ["E501"]  # test data (attack strings, sample SQL) reads better unbroken
 
 [lint.isort]
-known-first-party = ["mcp_sql_server"]
+known-first-party = ["mcp_sql_server", "gui_backend"]

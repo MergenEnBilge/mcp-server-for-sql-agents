@@ -195,3 +195,27 @@ async def test_the_read_only_role_has_no_write_privileges_even_with_its_read_onl
                 await db.rollback()
     finally:
         await engine.dispose()
+
+
+async def test_callers_and_their_roles_are_remembered_for_the_admin_grids(stack):
+    role = f"seen-{uuid4().hex[:6]}"
+    caller = Caller(sub=f"u-{uuid4().hex[:6]}", name="Seen Person", roles=frozenset({role}))
+    with pytest.raises(
+        ToolNotPermitted
+    ):  # no grants at all, but the attempt still counts as "seen"
+        await stack.schema.list_connections(caller)
+
+    async with stack.admin.connect() as db:
+        rows = (
+            await db.execute(
+                text(
+                    "SELECT subject_type, subject_id, display_name FROM known_subjects "
+                    "WHERE subject_id IN (:u, :r) ORDER BY subject_type DESC"
+                ),
+                {"u": caller.sub, "r": role},
+            )
+        ).all()
+    assert [tuple(r) for r in rows] == [
+        ("user", caller.sub, "Seen Person"),
+        ("role", role, None),
+    ]

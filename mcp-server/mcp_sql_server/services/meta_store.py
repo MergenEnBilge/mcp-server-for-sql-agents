@@ -17,7 +17,7 @@ from uuid import UUID
 
 from sqlalchemy import ARRAY, Text, bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 from mcp_sql_server.models import AuditEntry, ConnectionRecord, SchemaSearchHit
 
@@ -129,6 +129,14 @@ _SEARCH = """
     LIMIT :limit
 """
 
+_NOTE_SUBJECT = """
+    INSERT INTO known_subjects (subject_type, subject_id, display_name)
+    VALUES (:type, :id, :name)
+    ON CONFLICT (subject_type, subject_id) DO UPDATE
+        SET last_seen_at = now(),
+            display_name = COALESCE(EXCLUDED.display_name, known_subjects.display_name)
+"""
+
 _WRITE_AUDIT = """
     INSERT INTO audit_log (caller_sub, caller_name, tool_name, connection_name, tables,
                            arguments, success, error_message, row_count, result_summary,
@@ -215,11 +223,24 @@ class PostgresMetaStore(MetaStore):
                 for row in result.mappings()
             ]
 
+    @staticmethod
+    async def _note_subjects(conn: AsyncConnection, entry: AuditEntry) -> None:
+        """Remember the caller and their roles so the admin GUI can offer them in permission
+        grids. The identity provider owns the real user list; this is a convenience copy."""
+        subjects = [("user", entry.caller_sub, entry.caller_name)]
+        subjects += [("role", role, None) for role in entry.caller_roles]
+        for subject_type, subject_id, name in subjects:
+            await conn.execute(
+                text(_NOTE_SUBJECT),
+                {"type": subject_type, "id": subject_id, "name": name},
+            )
+
     async def write_audit(self, entry: AuditEntry) -> None:
         statement = text(_WRITE_AUDIT).bindparams(
             bindparam("tables", type_=ARRAY(Text)), bindparam("arguments", type_=JSONB)
         )
         async with self._engine.begin() as conn:
+            await self._note_subjects(conn, entry)
             await conn.execute(
                 statement,
                 {

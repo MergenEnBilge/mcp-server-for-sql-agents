@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gui-backend"
+version = "0.1.0"
+description = "REST API behind the admin GUI: connections, permissions, audit log, schema descriptions."
+requires-python = ">=3.12"
+dependencies = [
+    "mcp-sql-server",         # shared: encryption, cache, database adapters, token verification
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "testcontainers>=4.8",
+    "alembic>=1.14,<2",
+    "ruff",
+    "mypy>=1.10",
+]
+
+[tool.setuptools.packages.find]
+include = ["gui_backend*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["gui_backend"]
+mypy_path = "../mcp-server"  # the shared package, so its types are visible

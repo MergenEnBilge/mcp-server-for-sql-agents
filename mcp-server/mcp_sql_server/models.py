@@ -193,3 +193,4 @@ class AuditEntry:
     row_count: int | None = None
     result_summary: str | None = None
     error_message: str | None = None
+    caller_roles: list[str] = field(default_factory=list)  # so the GUI can list roles it has seen

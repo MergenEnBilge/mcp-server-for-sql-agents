@@ -67,6 +67,7 @@ class AuditService:
                 row_count=recorder.row_count,
                 result_summary=recorder.summary,
                 error_message=_describe(failure) if failure else None,
+                caller_roles=sorted(caller.roles),
             )
             try:
                 await self._store.write_audit(entry)
