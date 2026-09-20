@@ -130,8 +130,13 @@ def sqlite_file(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def secret_box() -> SecretBox:
-    return SecretBox(Fernet.generate_key().decode())
+def fernet_key() -> str:
+    return Fernet.generate_key().decode()
+
+
+@pytest.fixture(scope="session")
+def secret_box(fernet_key: str) -> SecretBox:
+    return SecretBox(fernet_key)
 
 
 @pytest.fixture(scope="session")

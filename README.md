@@ -18,7 +18,9 @@ Work in progress. Done so far:
 - [x] Local Postgres + Redis, the `app_meta` schema, and sample data in Postgres and SQLite → see [db/README.md](db/README.md)
 - [x] Database adapter and service layer (permissions, SQL validation, audit, output sanitizing), tested against Postgres and SQLite → see [mcp-server/README.md](mcp-server/README.md)
 
-Next up: the MCP tools on top of the services, then auth, caching and the GUI.
+- [x] MCP server with all eight tools over stdio, ready for Claude Desktop, tested end to end against both engines
+
+Next up: Streamable HTTP with OAuth 2.1, caching, then the GUI.
 
 ## Local development
 

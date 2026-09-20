@@ -1,14 +1,13 @@
 # mcp-server
 
-The part of the project that sits between an LLM and your databases. This folder
-currently holds the **adapter and service layers**, which are everything except the MCP
-tool wiring and authentication (both come next). The services can be used and tested on their
-own, with no MCP and no network involved.
+The part of the project that sits between an LLM and your databases: an MCP server with eight
+read-only tools. The real logic lives in a **service layer** that can be used and tested with no
+MCP and no network involved; the MCP tools are a thin wrapper over it.
 
 ## How it's layered
 
 ```
-   MCP tools (thin wrappers)          <- next step: just translate MCP calls into service calls
+   tools/ (MCP tools)                 <- thin: translate MCP calls into service calls
             │
    services/                          <- all the real logic: who may do what, is this SQL safe,
    ├─ permission_service                 what came back, what to write in the audit log
@@ -68,6 +67,40 @@ descriptions. It reads `.env` from the repo root.
 Settings come from environment variables (or `.env`); see [.env.example](../.env.example).
 The ones the server needs are `MCP_APP_META_URL` and `MCP_CONNECTION_SECRET_KEYS`, and the
 query limits are tunable with `MCP_DEFAULT_QUERY_TIMEOUT_S`, `MCP_MAX_ROW_LIMIT` and friends.
+
+## Connecting Claude Desktop (stdio)
+
+stdio has no login screen, so the identity the server acts as is set in its environment. There is
+deliberately no default: without `MCP_STDIO_SUB` the server refuses to start.
+
+Add this to Claude Desktop's `claude_desktop_config.json` (adjust the paths and values; the
+database URL and key are the ones from your `.env`):
+
+```json
+{
+  "mcpServers": {
+    "sql-data-layer": {
+      "command": "D:/path/to/repo/mcp-server/.venv/Scripts/python.exe",
+      "args": ["-m", "mcp_sql_server"],
+      "env": {
+        "MCP_APP_META_URL": "postgresql+asyncpg://mcp_app:<password>@localhost:5432/app_meta",
+        "MCP_CONNECTION_SECRET_KEYS": "<your fernet key>",
+        "MCP_STDIO_SUB": "dev-analyst",
+        "MCP_STDIO_NAME": "Dev Analyst",
+        "MCP_STDIO_ROLES": "analyst"
+      }
+    }
+  }
+}
+```
+
+With the sample data seeded (`python -m mcp_sql_server.devtools.seed`), try asking: *"Which product
+categories have the most products? Use the shop-sqlite database."*
+
+The eight tools are `list_connections`, `list_tables`, `describe_table`, `search_schema`,
+`get_relationships`, `run_query`, `explain_query` and `get_sample_rows`. All of them are marked
+read-only, and the server's instructions tell the model that text coming out of a database is data,
+never instructions.
 
 ## Tests
 

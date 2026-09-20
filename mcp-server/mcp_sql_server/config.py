@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,6 +20,11 @@ class QueryLimits:
     max_cell_chars: int = 2000
 
 
+def split_list(value: str) -> list[str]:
+    """'a, b,,c' -> ['a', 'b', 'c']"""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="MCP_",
@@ -33,6 +39,14 @@ class Settings(BaseSettings):
     # is what makes key rotation possible: add a new key at the front, re-save secrets.
     connection_secret_keys: SecretStr
 
+    # Optional. Without Redis everything still works, just without caching.
+    redis_url: SecretStr | None = None
+
+    # How long cached schema lookups live. Permission lookups are cached for less, and both
+    # are dropped immediately when an admin changes something in the GUI.
+    cache_ttl_s: int = Field(default=300, ge=1)
+    permission_cache_ttl_s: int = Field(default=60, ge=1)
+
     # Query governance. The hard maximum is enforced no matter what the caller asks for.
     default_query_timeout_s: float = Field(default=5.0, gt=0, le=60)
     default_row_limit: int = Field(default=500, ge=1)
@@ -42,6 +56,34 @@ class Settings(BaseSettings):
 
     # Longest text cell handed back to the LLM before it is cut off.
     max_cell_chars: int = Field(default=2000, ge=50)
+
+    # stdio transport (local development, e.g. Claude Desktop). stdio has no login, so the
+    # identity is configured here. There's deliberately no default: without MCP_STDIO_SUB
+    # the stdio transport refuses to start.
+    stdio_sub: str | None = None
+    stdio_name: str | None = None
+    stdio_roles: str = ""  # comma-separated
+
+    # Streamable HTTP transport and OAuth 2.1.
+    http_host: str = "127.0.0.1"
+    http_port: int = Field(default=8000, ge=1, le=65535)
+
+    # The address clients use to reach this server, e.g. https://mcp.example.com/mcp.
+    # It is this server's resource identifier (RFC 8707): tokens must be issued for it.
+    public_url: str | None = None
+    oauth_issuer: str | None = None
+    oauth_jwks_url: str | None = None  # defaults to <issuer>/protocol/openid-connect/certs
+    oauth_audience: str | None = None  # defaults to public_url
+    oauth_roles_claim: str = "realm_access.roles"  # dotted path into the token's claims
+    oauth_required_scopes: str = ""  # comma-separated
+
+    # "jwt" checks signed tokens locally. "introspection" asks the identity provider
+    # (RFC 7662) and caches the answer in Redis, for providers that issue opaque tokens.
+    token_verification: Literal["jwt", "introspection"] = "jwt"
+    oauth_introspection_url: str | None = None
+    oauth_introspection_client_id: str | None = None
+    oauth_introspection_client_secret: SecretStr | None = None
+    token_cache_ttl_s: int = Field(default=60, ge=1)
 
     def query_limits(self) -> QueryLimits:
         return QueryLimits(

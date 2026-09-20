@@ -14,6 +14,11 @@ dependencies = [
     "pydantic>=2.7,<3",
     "pydantic-settings>=2.3,<3",
     "python-dotenv>=1.0",     # dev seed script reads the repo .env
+    "mcp>=2,<3",              # official MCP SDK (MCPServer)
+    "httpx>=0.27",            # fetching the identity provider's signing keys
+    "pyjwt[crypto]>=2.8",     # validating OAuth access tokens
+    "redis>=5",               # cache for permissions, schema lookups and token checks
+    "uvicorn>=0.30",          # serves the Streamable HTTP transport
     "cryptography>=43",     # Fernet encryption of stored connection secrets
     "sqlglot>=25",          # parses SQL so we know which tables a query touches
 ]
