@@ -1,0 +1,5 @@
+# Tooling for running the app_meta migrations. The services carry their own dependencies.
+alembic>=1.14,<2
+sqlalchemy[asyncio]>=2.0,<3
+asyncpg>=0.30
+python-dotenv>=1.0

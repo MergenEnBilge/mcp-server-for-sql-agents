@@ -1,0 +1,12 @@
+# One ruff config for every Python folder in the repo.
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venv"]
+
+[lint]
+# pycodestyle, pyflakes, import order, bugbear, pyupgrade, implicit string concatenation
+select = ["E", "F", "I", "B", "UP", "ISC"]
+
+[lint.per-file-ignores]
+# Migrations are mostly SQL text; wrapping it to 100 columns makes it harder to read.
+"db/migrations/versions/*.py" = ["E501"]
