@@ -1,0 +1,40 @@
+/* Design tokens. Each colour has exactly one job; see docs/gui-design.md before adding another. */
+:root {
+  /* surfaces and text */
+  --ground: #f1f3f0;
+  --paper: #ffffff;
+  --ink: #15212b;
+  --ink-2: #4f5d68; /* secondary text: 6.6:1 on paper */
+  --rule: #c8d0d2;
+  --rule-strong: #8f9ea6;
+
+  /* meaning: never used decoratively */
+  --live: #0a7559; /* currently in effect */
+  --live-tint: #e2f1ec;
+  --fault: #b3261e; /* wrong or destructive */
+  --fault-tint: #fbe9e7;
+  --pending: #9a5b00; /* changed, not yet saved */
+  --pending-tint: #fbefd9;
+
+  /* the dark navigation rail */
+  --rail: #15212b;
+  --rail-text: #e8ecee;
+  --rail-muted: #9fb0b9;
+  --rail-rule: #2b3a47;
+
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --row-h: 32px;
+  --rail-w: 208px;
+  --radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}

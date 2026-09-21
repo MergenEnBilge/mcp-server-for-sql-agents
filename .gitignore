@@ -16,6 +16,8 @@ venv/
 # node
 node_modules/
 dist/
+test-results/
+playwright-report/
 
 # generated sample data
 db/sample_data/*.sqlite
