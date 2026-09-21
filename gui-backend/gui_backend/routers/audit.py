@@ -31,6 +31,7 @@ class AuditItem(BaseModel):
     occurred_at: datetime
     caller_sub: str
     caller_name: str | None
+    client_id: str | None  # the AI client that made the call; empty for the local stdio transport
     tool_name: str
     connection_name: str | None
     tables: list[str]
@@ -76,7 +77,7 @@ def _like(value: str) -> str:
 
 
 _LIST_COLUMNS = f"""
-    id, occurred_at, caller_sub, caller_name, tool_name, connection_name, tables, success,
+    id, occurred_at, caller_sub, caller_name, client_id, tool_name, connection_name, tables, success,
     row_count, duration_ms,
     left(arguments->>'sql', {SQL_PREVIEW_CHARS}) AS sql_preview,
     coalesce(length(arguments->>'sql'), 0) > {SQL_PREVIEW_CHARS} AS sql_truncated,

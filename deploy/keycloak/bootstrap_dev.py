@@ -15,10 +15,12 @@ Reads from the environment (or the repo .env):
 
 It creates:
     alice (admin), bob (analyst), carol (viewer)   sample users
-    e2e-test                                       a client that allows the password grant, used
-                                                   ONLY by automated tests to obtain tokens. The
-                                                   realm file doesn't include it, so it can't
-                                                   exist in a production realm by accident.
+    e2e-test, e2e-new-agent                        clients that allow the password grant, used ONLY
+                                                   by automated tests to obtain tokens. The realm
+                                                   file doesn't include them, so they can't exist in
+                                                   a production realm by accident. (The seed script
+                                                   approves e2e-test as an agent; e2e-new-agent is
+                                                   left unapproved, to test the approval pop-up.)
 It first makes sure the `mcp-audience` scope exists and is a default for every client, so tokens
 issued to MCP clients (including ones that register themselves) are marked as meant for the MCP
 server.
@@ -157,12 +159,20 @@ def main() -> None:
         role_repr = kc.get(f"/roles/{role}").json()
         kc.post(f"/users/{user_id}/role-mappings/realm", json=[role_repr]).raise_for_status()
 
-    # --- the client automated tests use to get tokens ---------------------------------------------
-    if not kc.get("/clients", params={"clientId": "e2e-test"}).json():
+    # --- the clients automated tests use to get tokens ---------------------------------------
+    for test_client in ("e2e-test", "e2e-new-agent"):
+        create_test_client(kc, test_client)
+    print(
+        f"Keycloak realm '{REALM}' ready: users alice, bob, carol; clients e2e-test, e2e-new-agent."
+    )
+
+
+def create_test_client(kc: httpx.Client, client_id: str) -> None:
+    if not kc.get("/clients", params={"clientId": client_id}).json():
         kc.post(
             "/clients",
             json={
-                "clientId": "e2e-test",
+                "clientId": client_id,
                 "name": "Automated test client (dev only)",
                 "enabled": True,
                 "publicClient": True,
@@ -194,7 +204,6 @@ def main() -> None:
                 ],
             },
         ).raise_for_status()
-    print(f"Keycloak realm '{REALM}' ready: users alice, bob, carol; client e2e-test.")
 
 
 if __name__ == "__main__":

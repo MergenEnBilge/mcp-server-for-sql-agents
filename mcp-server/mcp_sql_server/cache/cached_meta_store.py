@@ -22,11 +22,12 @@ from pydantic import TypeAdapter
 
 from mcp_sql_server.cache.base import META, Cache
 from mcp_sql_server.cache.helpers import cached_json, subjects_fingerprint
-from mcp_sql_server.models import AuditEntry, ConnectionRecord, SchemaSearchHit
+from mcp_sql_server.models import AgentRecord, AuditEntry, ConnectionRecord, SchemaSearchHit
 from mcp_sql_server.services.meta_store import DescriptionKey, MetaStore, Subjects
 
 _RECORDS = TypeAdapter(list[ConnectionRecord])
 _NAMES = TypeAdapter(list[str])
+_AGENT = TypeAdapter(AgentRecord)
 # Description keys are tuples, which JSON can't use as object keys, so store them as rows.
 _DESCRIPTION_ROWS = TypeAdapter(list[tuple[str, str | None, str]])
 
@@ -79,6 +80,28 @@ class CachedMetaStore(MetaStore):
             lambda: _sorted(self._inner.allowed_tools(subjects)),
         )
         return frozenset(names)
+
+    async def get_agent(self, client_id: str) -> AgentRecord | None:
+        # Only a client that exists is cached. A client nobody has seen yet must be looked up
+        # afresh, so that the moment it is registered it is found.
+        version = await self._cache.version(META)
+        key = f"{META}:{version}:agent:{client_id}"
+        if version is not None and (hit := await self._cache.get(key)) is not None:
+            try:
+                return _AGENT.validate_json(hit)
+            except ValueError:
+                pass
+        agent = await self._inner.get_agent(client_id)
+        if agent is not None and version is not None:
+            await self._cache.set(key, _AGENT.dump_json(agent).decode(), self._permission_ttl_s)
+        return agent
+
+    async def register_agent(
+        self, client_id: str, *, user_sub: str, user_name: str | None, reported_name: str | None
+    ) -> bool:
+        return await self._inner.register_agent(
+            client_id, user_sub=user_sub, user_name=user_name, reported_name=reported_name
+        )
 
     async def descriptions(self, connection_id: UUID) -> dict[DescriptionKey, str]:
         async def load() -> list[tuple[str, str | None, str]]:

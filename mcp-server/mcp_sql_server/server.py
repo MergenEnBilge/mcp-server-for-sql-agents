@@ -21,6 +21,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp
 
+from mcp_sql_server.auth.agent_registration import RegisterOnInitialize
 from mcp_sql_server.auth.caller import CallerProvider, stdio_caller, token_caller
 from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.config import Settings, get_settings, split_list
@@ -119,7 +120,11 @@ def create_http_app(
         transport_security=transport_security(settings),
         max_request_body_size=MAX_REQUEST_BODY_BYTES,
     )
-    return SecurityHeaders(with_browser_access(app, settings))
+    # Register an AI client as soon as it says hello, so an administrator sees it straight away.
+    registering = RegisterOnInitialize(
+        app, verifier, services.permissions.note_client, settings.oauth_roles_claim
+    )
+    return SecurityHeaders(with_browser_access(registering, settings))
 
 
 def main(argv: list[str] | None = None) -> None:

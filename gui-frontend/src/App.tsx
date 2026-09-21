@@ -4,6 +4,7 @@ import { ApiProvider } from "./api/client";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { Shell } from "./components/Shell";
 import { ErrorNote } from "./components/ui";
+import { AgentsPage } from "./features/agents/AgentsPage";
 import { AuditPage } from "./features/audit/AuditPage";
 import { ConnectionsPage } from "./features/connections/ConnectionsPage";
 import { HealthPage } from "./features/health/HealthPage";
@@ -18,6 +19,7 @@ export function AppRoutes() {
       <Route element={<Shell />}>
         <Route index element={<Navigate to="/audit" replace />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="agents" element={<AgentsPage />} />
         <Route path="permissions" element={<PermissionsPage />} />
         <Route path="connections" element={<ConnectionsPage />} />
         <Route path="schema" element={<SchemaPage />} />

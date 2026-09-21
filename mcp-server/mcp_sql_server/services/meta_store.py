@@ -19,7 +19,7 @@ from sqlalchemy import ARRAY, Text, bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
-from mcp_sql_server.models import AuditEntry, ConnectionRecord, SchemaSearchHit
+from mcp_sql_server.models import AgentRecord, AuditEntry, ConnectionRecord, SchemaSearchHit
 
 Subjects = Sequence[tuple[str, str]]  # ("user", "<sub>") / ("role", "<name>")
 
@@ -45,6 +45,18 @@ class MetaStore(ABC):
     @abstractmethod
     async def allowed_tools(self, subjects: Subjects) -> frozenset[str]:
         """MCP tool names granted to any of these subjects."""
+
+    @abstractmethod
+    async def get_agent(self, client_id: str) -> AgentRecord | None:
+        """The AI client with this OAuth client id, or None if it has never been seen."""
+
+    @abstractmethod
+    async def register_agent(
+        self, client_id: str, *, user_sub: str, user_name: str | None, reported_name: str | None
+    ) -> bool:
+        """Note that this client acted for this person just now. A client seen for the first time
+        is created as `pending`, which grants nothing. Returns False if it couldn't be created
+        because too many are already waiting."""
 
     @abstractmethod
     async def descriptions(self, connection_id: UUID) -> dict[DescriptionKey, str]:
@@ -102,6 +114,37 @@ _ALLOWED_TOOLS = f"""
     FROM tool_permissions p {_MATCHES_A_SUBJECT.format(alias="p")}
 """
 
+_GET_AGENT = """
+    SELECT a.id, a.client_id, a.label, a.reported_name, a.status, a.allowed_tools,
+           a.all_connections, a.expires_at,
+           COALESCE((SELECT array_agg(c.connection_id) FROM agent_connections c
+                     WHERE c.agent_id = a.id), '{}') AS connection_ids
+    FROM agents a
+    WHERE a.client_id = :client_id
+"""
+
+# Seen again: refresh who and when (and the name it gave itself, if it gave one).
+_TOUCH_AGENT = """
+    UPDATE agents
+    SET last_seen_at = now(), last_user_sub = :sub,
+        last_user_name = COALESCE(:name, last_user_name),
+        reported_name = COALESCE(:reported_name, reported_name)
+    WHERE client_id = :client_id
+"""
+
+# Seen for the first time: the row starts `pending` with no tools, because the columns the
+# server may write don't include status or allowed_tools. The cap stops a flood of new clients
+# from filling the table with pending requests nobody will ever read.
+_ADD_AGENT = """
+    INSERT INTO agents (client_id, reported_name, last_user_sub, last_user_name)
+    SELECT CAST(:client_id AS text), CAST(:reported_name AS text), CAST(:sub AS text),
+           CAST(:name AS text)
+    WHERE (SELECT count(*) FROM agents WHERE status = 'pending') < :cap
+    ON CONFLICT (client_id) DO NOTHING
+"""
+
+MAX_PENDING_AGENTS = 200
+
 _DESCRIPTIONS = """
     SELECT lower(table_name), lower(column_name), description
     FROM schema_descriptions
@@ -146,10 +189,10 @@ def _is_builtin_role(role: str) -> bool:
 
 
 _WRITE_AUDIT = """
-    INSERT INTO audit_log (caller_sub, caller_name, tool_name, connection_name, tables,
+    INSERT INTO audit_log (caller_sub, caller_name, client_id, tool_name, connection_name, tables,
                            arguments, success, error_message, row_count, result_summary,
                            duration_ms)
-    VALUES (:caller_sub, :caller_name, :tool_name, :connection_name, :tables,
+    VALUES (:caller_sub, :caller_name, :client_id, :tool_name, :connection_name, :tables,
             :arguments, :success, :error_message, :row_count, :result_summary, :duration_ms)
 """
 
@@ -199,6 +242,36 @@ class PostgresMetaStore(MetaStore):
                 text(_ALLOWED_TOOLS).bindparams(*_SUBJECTS), self._subject_params(subjects)
             )
             return frozenset(row[0] for row in result)
+
+    async def get_agent(self, client_id: str) -> AgentRecord | None:
+        async with self._engine.connect() as conn:
+            row = (
+                (await conn.execute(text(_GET_AGENT), {"client_id": client_id})).mappings().first()
+            )
+        return AgentRecord(**row) if row else None
+
+    async def register_agent(
+        self, client_id: str, *, user_sub: str, user_name: str | None, reported_name: str | None
+    ) -> bool:
+        params = {
+            "client_id": client_id,
+            "sub": user_sub,
+            "name": user_name,
+            "reported_name": reported_name,
+        }
+        async with self._engine.begin() as conn:
+            touched = (await conn.execute(text(_TOUCH_AGENT), params)).rowcount
+            if touched:
+                return True
+            added = await conn.execute(text(_ADD_AGENT), {**params, "cap": MAX_PENDING_AGENTS})
+            return added.rowcount > 0 or (await self._agent_exists(conn, client_id))
+
+    @staticmethod
+    async def _agent_exists(conn: AsyncConnection, client_id: str) -> bool:
+        found = await conn.execute(
+            text("SELECT 1 FROM agents WHERE client_id = :client_id"), {"client_id": client_id}
+        )
+        return found.first() is not None
 
     async def descriptions(self, connection_id: UUID) -> dict[DescriptionKey, str]:
         async with self._engine.connect() as conn:
@@ -256,6 +329,7 @@ class PostgresMetaStore(MetaStore):
                 {
                     "caller_sub": entry.caller_sub,
                     "caller_name": entry.caller_name,
+                    "client_id": entry.client_id,
                     "tool_name": entry.tool_name,
                     "connection_name": entry.connection_name,
                     "tables": entry.tables,

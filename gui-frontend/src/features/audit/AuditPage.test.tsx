@@ -11,6 +11,7 @@ const item = (over: Partial<AuditItem>): AuditItem => ({
   occurred_at: "2026-09-21T14:02:11Z",
   caller_sub: "u-ana",
   caller_name: "Ana Analyst",
+  client_id: "chat-1",
   tool_name: "run_query",
   connection_name: "shop-pg",
   tables: ["orders"],

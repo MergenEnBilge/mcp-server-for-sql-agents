@@ -11,6 +11,7 @@ from mcp_sql_server.adapters.base import DBAdapter
 from mcp_sql_server.config import QueryLimits
 from mcp_sql_server.errors import TableNotFound
 from mcp_sql_server.models import (
+    AgentRecord,
     AuditEntry,
     Caller,
     ColumnInfo,
@@ -31,6 +32,8 @@ from mcp_sql_server.services.sanitizer import OutputSanitizer
 from mcp_sql_server.services.schema_service import SchemaService
 
 ANALYST = Caller(sub="user-1", name="Ana Lyst", roles=frozenset({"analyst"}))
+# The same person, acting through an AI client. Tests decide what that client was approved for.
+ANALYST_VIA_AGENT = ANALYST.model_copy(update={"client_id": "chat-client"})
 # May call every tool, but has been given no connection or table access.
 OUTSIDER = Caller(sub="user-2", name="No Access")
 
@@ -48,6 +51,9 @@ class FakeMetaStore(MetaStore):
         self.search_calls: list[tuple[UUID, str, list[str], int]] = []
         self.audit: list[AuditEntry] = []
         self.fail_audit = False
+        self.agents: dict[str, AgentRecord] = {}
+        self.agent_sightings: list[tuple[str, str, str | None]] = []  # (client, user, name)
+        self.max_pending = 100
 
     async def list_connections(self, subjects: Subjects) -> list[ConnectionRecord]:
         return [c for c in self.connections.values() if self._may_use(c.id, subjects)]
@@ -68,6 +74,26 @@ class FakeMetaStore(MetaStore):
 
     async def allowed_tools(self, subjects: Subjects) -> frozenset[str]:
         return frozenset(tool for t, i, tool in self.tool_grants if (t, i) in set(subjects))
+
+    async def get_agent(self, client_id: str) -> AgentRecord | None:
+        return self.agents.get(client_id)
+
+    async def register_agent(
+        self, client_id: str, *, user_sub: str, user_name: str | None, reported_name: str | None
+    ) -> bool:
+        self.agent_sightings.append((client_id, user_sub, reported_name))
+        known = self.agents.get(client_id)
+        if known is not None:
+            if reported_name:
+                self.agents[client_id] = known.model_copy(update={"reported_name": reported_name})
+            return True
+        pending = sum(1 for a in self.agents.values() if a.status == "pending")
+        if pending >= self.max_pending:
+            return False
+        self.agents[client_id] = AgentRecord(
+            id=uuid4(), client_id=client_id, status="pending", reported_name=reported_name
+        )
+        return True
 
     async def descriptions(self, connection_id: UUID) -> dict[DescriptionKey, str]:
         return dict(self.curated.get(connection_id, {}))

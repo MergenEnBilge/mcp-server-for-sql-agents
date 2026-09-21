@@ -40,7 +40,15 @@ def caller_from_claims(claims: dict[str, Any], roles_claim: str) -> Caller:
         sub=str(claims["sub"]),
         name=claims.get("name") or claims.get("preferred_username") or claims.get("email"),
         roles=frozenset(str(r) for r in (roles or [])),
+        client_id=client_id_from_claims(claims),
     )
+
+
+def client_id_from_claims(claims: dict[str, Any]) -> str | None:
+    """The OAuth client the token was issued to: `azp` in a JWT, `client_id` in an
+    introspection answer. It is set by the identity provider, so an agent can't choose it."""
+    value = claims.get("azp") or claims.get("client_id")
+    return str(value) if value else None
 
 
 def stdio_caller(settings: Settings) -> CallerProvider:
@@ -65,6 +73,12 @@ def token_caller(roles_claim: str) -> CallerProvider:
         token = get_access_token()
         if token is None or not token.claims:
             raise NotAuthenticated("Authentication is required.")
-        return caller_from_claims(token.claims, roles_claim)
+        caller = caller_from_claims(token.claims, roles_claim)
+        if caller.client_id is None:
+            # Without it there is no agent to approve, and "no agent" must never mean "no checks".
+            raise NotAuthenticated(
+                "The access token does not say which application it was issued to."
+            )
+        return caller
 
     return current

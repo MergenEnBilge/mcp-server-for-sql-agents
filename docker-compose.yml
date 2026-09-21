@@ -160,6 +160,7 @@ services:
     image: caddy:2-alpine
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+      KEYCLOAK_EXPOSE_ADMIN: ${KEYCLOAK_EXPOSE_ADMIN:-false}
     ports:
       - "80:80"
       - "443:443"
@@ -199,7 +200,7 @@ services:
     command:
       - sh
       - -c
-      - python /sample_data/build_sqlite.py /data/sample.sqlite && python -m mcp_sql_server.devtools.seed
+      - python /sample_data/build_sqlite.py /data/sample.sqlite && python -m mcp_sql_server.devtools.seed --approve-agent e2e-test
     environment:
       APP_META_MIGRATIONS_URL: postgresql+asyncpg://meta_owner:${META_OWNER_PASSWORD}@postgres:5432/app_meta
       MCP_CONNECTION_SECRET_KEYS: ${MCP_CONNECTION_SECRET_KEYS}

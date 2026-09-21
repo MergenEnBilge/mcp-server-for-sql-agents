@@ -12,6 +12,7 @@ export interface AuditItem {
   occurred_at: string;
   caller_sub: string;
   caller_name: string | null;
+  client_id: string | null;
   tool_name: string;
   connection_name: string | null;
   tables: string[];
@@ -197,4 +198,46 @@ export interface Report {
   owner_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type AgentState = "pending" | "approved" | "blocked" | "expired";
+
+export interface Agent {
+  id: string;
+  client_id: string;
+  label: string;
+  /** What the agent called itself. Not verified: show it as a hint only. */
+  reported_name: string | null;
+  state: AgentState;
+  allowed_tools: string[];
+  all_connections: boolean;
+  connections: string[];
+  expires_at: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_user_sub: string | null;
+  last_user_name: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  calls_24h: number;
+}
+
+export interface PendingAgents {
+  count: number;
+  agents: Agent[];
+}
+
+export interface AgentOptions {
+  tools: { name: string; description: string }[];
+  presets: Record<string, string[]>;
+  connections: { id: string; name: string; engine: string }[];
+}
+
+/** What an administrator allows an agent. */
+export interface AgentAccess {
+  label: string;
+  tools: string[];
+  all_connections: boolean;
+  connection_ids: string[];
+  expires_in_hours: number | null;
 }

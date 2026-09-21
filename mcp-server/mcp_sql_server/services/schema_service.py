@@ -47,7 +47,7 @@ class SchemaService(ToolService):
 
     async def list_connections(self, caller: Caller) -> list[ConnectionInfo]:
         async with self._audit.record(caller, "list_connections", {}) as rec:
-            await self._permissions.require_tool(caller, "list_connections")
+            agent = await self._permissions.require_tool(caller, "list_connections")
             flags: list[SecurityFlag] = []
             clean = self._sanitizer.clean_text
             connections = [
@@ -56,7 +56,7 @@ class SchemaService(ToolService):
                     engine=record.engine,
                     description=clean(record.description, f"description of {record.name}", flags),
                 )
-                for record in await self._permissions.list_connections(caller)
+                for record in await self._permissions.list_connections(caller, agent)
             ]
             rec.summary = _summary(f"{len(connections)} connections", flags)
             return connections

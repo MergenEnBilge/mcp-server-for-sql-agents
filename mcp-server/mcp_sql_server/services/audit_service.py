@@ -68,6 +68,7 @@ class AuditService:
                 result_summary=recorder.summary,
                 error_message=_describe(failure) if failure else None,
                 caller_roles=sorted(caller.roles),
+                client_id=caller.client_id,
             )
             try:
                 await self._store.write_audit(entry)

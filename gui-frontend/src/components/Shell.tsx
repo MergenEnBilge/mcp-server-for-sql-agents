@@ -4,11 +4,14 @@ import { useApi } from "../api/client";
 import type { Me } from "../api/types";
 import { useAsync } from "../api/useAsync";
 import { useAuth } from "../auth/AuthProvider";
+import { PendingAgentPrompt } from "../features/agents/PendingAgentPrompt";
+import { usePendingAgents } from "../features/agents/usePendingAgents";
 import { ErrorNote, PageHead } from "./ui";
 
 /** The screens, in the order they are used. Each has a route in App.tsx. */
 export const NAV = [
   { to: "/audit", label: "Audit log" },
+  { to: "/agents", label: "Agents" },
   { to: "/permissions", label: "Permissions" },
   { to: "/connections", label: "Connections" },
   { to: "/schema", label: "Schema" },
@@ -24,6 +27,8 @@ export function Shell() {
   const auth = useAuth();
   const api = useApi();
   const me = useAsync((signal) => api.get<Me>("/me", undefined, signal), [api]);
+  // Agents waiting for approval: shown as a count on the nav, and as a pop-up on any screen.
+  const pending = usePendingAgents(api, me.data?.is_admin === true);
 
   return (
     <div className="app">
@@ -38,6 +43,11 @@ export function Shell() {
             NAV.map((item) => (
               <NavLink key={item.to} to={item.to}>
                 {item.label}
+                {item.to === "/agents" && pending.agents.length > 0 && (
+                  <span className="badge" aria-label={`${pending.agents.length} waiting for a decision`}>
+                    {pending.agents.length}
+                  </span>
+                )}
               </NavLink>
             ))}
         </nav>
@@ -55,7 +65,10 @@ export function Shell() {
         ) : me.data && !me.data.is_admin ? (
           <AccessDenied name={me.data.name} />
         ) : me.data ? (
-          <Outlet />
+          <>
+            <Outlet />
+            <PendingAgentPrompt agents={pending.agents} onDecided={() => void pending.refresh()} />
+          </>
         ) : (
           <p className="muted" role="status">
             Loading…

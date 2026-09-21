@@ -152,6 +152,12 @@ function DetailPanel({ id }: { id: number }) {
         <dd>
           {d.caller_name ?? "(no name)"} <span className="mono muted">{d.caller_sub}</span>
         </dd>
+        {d.client_id && (
+          <>
+            <dt>Agent</dt>
+            <dd className="mono">{d.client_id}</dd>
+          </>
+        )}
         <dt>Call</dt>
         <dd>
           {d.tool_name}

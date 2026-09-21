@@ -18,7 +18,16 @@ from sqlalchemy import text
 
 from gui_backend.config import Settings, get_settings
 from gui_backend.context import Context, build_context
-from gui_backend.routers import audit, connections, health, me, permissions, reports, schema
+from gui_backend.routers import (
+    agents,
+    audit,
+    connections,
+    health,
+    me,
+    permissions,
+    reports,
+    schema,
+)
 from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.http_security import SecurityHeaders
 
@@ -56,7 +65,7 @@ def create_app(
             allow_headers=["Authorization", "Content-Type"],
         )
 
-    for module in (me, audit, connections, permissions, schema, health, reports):
+    for module in (me, audit, connections, agents, permissions, schema, health, reports):
         app.include_router(module.router)
 
     _add_health_routes(app, ctx)

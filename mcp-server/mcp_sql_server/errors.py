@@ -15,6 +15,12 @@ class ToolNotPermitted(McpSqlError):
     """The caller has no grant for this tool."""
 
 
+class AgentNotApproved(McpSqlError):
+    """The AI client behind the request hasn't been approved (yet, any more, or at all).
+    The message tells the model what to say to the person, because only an administrator can
+    change it."""
+
+
 class ConnectionNotFound(McpSqlError):
     """Unknown, inactive, or not accessible to the caller (indistinguishable on purpose)."""
 

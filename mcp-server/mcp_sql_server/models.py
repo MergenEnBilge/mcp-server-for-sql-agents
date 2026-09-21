@@ -6,7 +6,7 @@ Two families:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -26,11 +26,39 @@ class Caller(BaseModel):
     sub: str = Field(min_length=1)
     name: str | None = None
     roles: frozenset[str] = frozenset()
+    # The AI client acting for this person (the OAuth client the token was issued to). None only
+    # for the local stdio transport, which has no login and is trusted by whoever configured it.
+    client_id: str | None = None
 
     def subjects(self) -> tuple[tuple[str, str], ...]:
         """Everything a permission can be granted to for this caller: their own user id,
         plus each of their roles. A grant to any one of these applies."""
         return (("user", self.sub), *(("role", role) for role in sorted(self.roles)))
+
+
+AgentStatus = Literal["pending", "approved", "blocked"]
+AgentState = Literal["pending", "approved", "blocked", "expired"]
+
+
+class AgentRecord(BaseModel):
+    """An AI client the server has seen, and what an administrator allowed it (see 0003)."""
+
+    id: UUID
+    client_id: str
+    label: str = ""
+    reported_name: str | None = None
+    status: AgentStatus
+    allowed_tools: list[str] = Field(default_factory=list)
+    all_connections: bool = True
+    connection_ids: list[UUID] = Field(default_factory=list)
+    expires_at: datetime | None = None
+
+    def state(self, now: datetime | None = None) -> AgentState:
+        """`approved` turns into `expired` once the approval's end date has passed."""
+        if self.status == "approved" and self.expires_at is not None:
+            if self.expires_at <= (now or datetime.now(UTC)):
+                return "expired"
+        return self.status
 
 
 # --- what adapters return -----------------------------------------------------------------
@@ -194,3 +222,4 @@ class AuditEntry:
     result_summary: str | None = None
     error_message: str | None = None
     caller_roles: list[str] = field(default_factory=list)  # so the GUI can list roles it has seen
+    client_id: str | None = None  # which AI client made the call

@@ -14,6 +14,8 @@ What it sets up, for the role `analyst` (change with --role):
     something to hide), and to every MCP tool
   * human-written descriptions of the tables and key columns, for describe_table
     and search_schema
+  * with --approve-agent NAME (repeatable), AI clients that are approved for every tool and
+    every database, so automated tests can sign in without waiting for a person to approve them
 
 Safe to run repeatedly. Never use against a real deployment: it wipes and recreates
 the role's table grants on these two connections.
@@ -26,7 +28,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import ARRAY, Text, bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -96,6 +98,7 @@ async def seed_sample_registry(
     sqlite_path: str | None,
     role: str = "analyst",
     hidden_tables: Sequence[str] = ("payments",),
+    approved_agents: Sequence[str] = (),
 ) -> None:
     """Register the sample connections and grant `role` access. `engine` must be able to
     write to app_meta (the migrations owner, or the GUI's role)."""
@@ -108,6 +111,18 @@ async def seed_sample_registry(
                     "VALUES ('role', :role, :tool) ON CONFLICT DO NOTHING"
                 ),
                 {"role": role, "tool": tool},
+            )
+
+        for client_id in approved_agents:
+            await conn.execute(
+                text(
+                    "INSERT INTO agents (client_id, label, status, allowed_tools, decided_by) "
+                    "VALUES (:client_id, 'Sample agent', 'approved', :tools, 'seed script') "
+                    "ON CONFLICT (client_id) DO UPDATE SET status = 'approved', "
+                    "allowed_tools = EXCLUDED.allowed_tools, all_connections = true, "
+                    "expires_at = NULL"
+                ).bindparams(bindparam("tools", type_=ARRAY(Text))),
+                {"client_id": client_id, "tools": sorted(TOOL_NAMES)},
             )
 
         targets: list[tuple[str, str, str, dict[str, object], str | None]] = []
@@ -201,6 +216,13 @@ async def seed_sample_registry(
 def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--role", default="analyst", help="role to grant access to")
+    parser.add_argument(
+        "--approve-agent",
+        action="append",
+        default=[],
+        metavar="CLIENT_ID",
+        help="OAuth client id of an AI client to approve for everything (repeatable)",
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[3]
@@ -230,6 +252,7 @@ def _main() -> None:
                 ),
                 sqlite_path=str(sqlite_path) if sqlite_path.exists() else None,
                 role=args.role,
+                approved_agents=args.approve_agent,
             )
         finally:
             await engine.dispose()

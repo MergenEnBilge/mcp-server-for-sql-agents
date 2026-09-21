@@ -151,6 +151,7 @@ def registered(postgres: PostgresInfra, sqlite_file: Path, secret_box: SecretBox
                     password=postgres.passwords["ORG_READONLY"],
                 ),
                 sqlite_path=str(sqlite_file),
+                approved_agents=("test-client",),  # what fake_idp.py signs its tokens for
             )
         finally:
             await engine.dispose()
