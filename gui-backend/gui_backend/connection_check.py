@@ -88,13 +88,19 @@ def explain(exc: BaseException, engine: str, details: dict[str, Any], password: 
     where = _where(engine, details)
     user = details.get("username")
 
-    if (
+    if "access denied" in lowered and "to database" in lowered:
+        # MySQL says this both for a database that isn't there and for one the user can't use.
+        message = (
+            f"'{user}' can't use the database '{details.get('database')}': it either "
+            "doesn't exist or that user has no rights on it."
+        )
+    elif (
         "password authentication failed" in lowered
         or "access denied" in lowered
         or "login failed" in lowered
     ):
         message = f"authentication failed for user '{user}'."
-    elif "does not exist" in lowered and "database" in lowered:
+    elif ("does not exist" in lowered and "database" in lowered) or "unknown database" in lowered:
         message = f"the database '{details.get('database')}' does not exist on that server."
     elif "unable to open database file" in lowered or "no such file" in lowered:
         message = f"could not open {where}."

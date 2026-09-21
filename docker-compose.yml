@@ -111,7 +111,10 @@ services:
 
   mcp-server:
     <<: [*service, *locked-down]
-    build: { context: ., dockerfile: mcp-server/Dockerfile }
+    build:
+      context: .
+      dockerfile: mcp-server/Dockerfile
+      args: { EXTRAS: "${DB_DRIVERS:-mysql}" }
     environment:
       MCP_APP_META_URL: postgresql+asyncpg://mcp_app:${MCP_APP_PASSWORD}@postgres:5432/app_meta
       MCP_CONNECTION_SECRET_KEYS: ${MCP_CONNECTION_SECRET_KEYS:?set MCP_CONNECTION_SECRET_KEYS in .env}
@@ -132,7 +135,10 @@ services:
 
   gui-backend:
     <<: [*service, *locked-down]
-    build: { context: ., dockerfile: gui-backend/Dockerfile }
+    build:
+      context: .
+      dockerfile: gui-backend/Dockerfile
+      args: { EXTRAS: "${DB_DRIVERS:-mysql}" }
     environment:
       GUI_APP_META_URL: postgresql+asyncpg://gui_app:${GUI_APP_PASSWORD}@postgres:5432/app_meta
       GUI_CONNECTION_SECRET_KEYS: ${MCP_CONNECTION_SECRET_KEYS}
@@ -141,6 +147,7 @@ services:
       GUI_OAUTH_AUDIENCE: https://${PUBLIC_HOST:-localhost}/api
       GUI_OAUTH_JWKS_URL: http://keycloak:8080/auth/realms/sql-data-layer/protocol/openid-connect/certs
       GUI_MCP_HEALTH_URL: http://mcp-server:8000/healthz
+      GUI_MCP_PUBLIC_URL: https://${PUBLIC_HOST:-localhost}/mcp
       GUI_SQLITE_ROOT: /data
     volumes:
       - sampledata:/data:ro

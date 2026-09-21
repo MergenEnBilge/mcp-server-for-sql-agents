@@ -14,6 +14,7 @@ export const NAV = [
   { to: "/agents", label: "Agents" },
   { to: "/permissions", label: "Permissions" },
   { to: "/connections", label: "Connections" },
+  { to: "/connect", label: "Connect" },
   { to: "/schema", label: "Schema" },
   { to: "/health", label: "Health" },
   { to: "/reports", label: "Reports" },

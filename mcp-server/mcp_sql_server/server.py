@@ -3,7 +3,7 @@
     python -m mcp_sql_server                       # stdio, for Claude Desktop and similar
     python -m mcp_sql_server --transport http      # Streamable HTTP with OAuth 2.1
 
-Every transport serves the same eight tools over the same services; transports differ only
+Every transport serves the same nine tools over the same services; transports differ only
 in how the caller's identity is established (see auth/caller.py).
 """
 
@@ -18,7 +18,7 @@ from mcp.server.auth.provider import TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.types import ASGIApp
 
 from mcp_sql_server.auth.agent_registration import RegisterOnInitialize
@@ -26,6 +26,7 @@ from mcp_sql_server.auth.caller import CallerProvider, stdio_caller, token_calle
 from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.config import Settings, get_settings, split_list
 from mcp_sql_server.container import Services, build_services
+from mcp_sql_server.docs import read_doc
 from mcp_sql_server.http_security import (
     MAX_REQUEST_BODY_BYTES,
     SecurityHeaders,
@@ -75,6 +76,12 @@ def create_server(
         # Deliberately public and dependency-free: it answers "is the process up?", which is
         # all a load balancer needs. It says nothing about the databases.
         return JSONResponse({"status": "ok"})
+
+    @server.custom_route("/agent-guide", methods=["GET"])  # type: ignore[untyped-decorator]
+    async def agent_guide(_request: Request) -> PlainTextResponse:
+        # The same guide agents can read as an MCP resource, for anyone to read before
+        # connecting. It is documentation: it says nothing about any database or person.
+        return PlainTextResponse(read_doc("guide.md"), media_type="text/markdown; charset=utf-8")
 
     return server
 

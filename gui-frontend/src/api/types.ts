@@ -103,6 +103,9 @@ export interface EngineInfo {
   label: string;
   default_port: number | null;
   required: string[];
+  /** False when this server has no driver for the engine (see `unavailable_reason`). */
+  available: boolean;
+  unavailable_reason: string | null;
 }
 
 export interface ConnectionTestResult {
@@ -240,4 +243,12 @@ export interface AgentAccess {
   all_connections: boolean;
   connection_ids: string[];
   expires_in_hours: number | null;
+}
+
+export interface ServerInfo {
+  /** Where agents connect. Null until an operator sets the public address. */
+  mcp_url: string | null;
+  guide_url: string | null;
+  issuer: string;
+  secure: boolean;
 }

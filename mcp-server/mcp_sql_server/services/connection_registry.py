@@ -19,6 +19,7 @@ or, for SQLite: {"path": "/data/shop.sqlite"}
 """
 
 import asyncio
+import importlib.util
 import logging
 from collections.abc import Callable
 from datetime import datetime
@@ -48,6 +49,37 @@ DRIVERS = {
 }
 
 
+# The driver Microsoft's ODBC layer needs for SQL Server, when the engine doesn't say otherwise.
+MSSQL_DEFAULT_ODBC_DRIVER = "ODBC Driver 18 for SQL Server"
+
+
+def driver_problem(engine: str) -> str | None:
+    """Why this server can't open databases of this engine, or None if it can.
+
+    A registered database of an engine whose driver isn't installed would only ever fail, so the
+    admin console says so up front instead of letting someone find out at the first query.
+    """
+    module = DRIVERS.get(engine)
+    if module is None:
+        return "This engine isn't supported."
+    if importlib.util.find_spec(module) is None:
+        return (
+            f"The '{module}' driver isn't installed in this server. "
+            "Rebuild the image with this engine included (see the README)."
+        )
+    if engine == "mssql":
+        try:
+            pyodbc = importlib.import_module("pyodbc")  # no type stubs; only asked for its drivers
+        except ImportError:
+            return "The 'pyodbc' package isn't installed in this server."
+        if not any("SQL Server" in name for name in pyodbc.drivers()):
+            return (
+                "Microsoft's ODBC driver for SQL Server isn't installed in this server. "
+                "Rebuild the image with mssql included (see the README)."
+            )
+    return None
+
+
 class AdapterProvider(Protocol):
     """What the services need from the registry. Tests substitute their own."""
 
@@ -68,6 +100,9 @@ def build_engine_url(
         return URL.create(f"sqlite+{driver}", database=str(path))
     if details.get("host"):
         check_host(str(details["host"]))
+    query = dict(details.get("options") or {})
+    if record.engine == "mssql":
+        query.setdefault("driver", MSSQL_DEFAULT_ODBC_DRIVER)  # the ODBC layer can't guess one
     return URL.create(
         f"{record.engine}+{driver}",
         username=details.get("username"),
@@ -75,7 +110,7 @@ def build_engine_url(
         host=details.get("host"),
         port=details.get("port"),
         database=details.get("database"),
-        query=details.get("options") or {},
+        query=query,
     )
 
 

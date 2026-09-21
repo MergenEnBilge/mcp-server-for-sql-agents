@@ -22,7 +22,7 @@ jobs:
             mcp-server/pyproject.toml
             gui-backend/pyproject.toml
       - name: Install
-        run: pip install -e "mcp-server[dev]" -e "gui-backend[dev]"
+        run: pip install -e "mcp-server[dev,mysql]" -e "gui-backend[dev]"
       - name: Lint
         run: |
           ruff check .

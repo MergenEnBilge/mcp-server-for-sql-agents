@@ -7,6 +7,7 @@ import { ErrorNote } from "./components/ui";
 import { AgentsPage } from "./features/agents/AgentsPage";
 import { AuditPage } from "./features/audit/AuditPage";
 import { ConnectionsPage } from "./features/connections/ConnectionsPage";
+import { ConnectPage } from "./features/connect/ConnectPage";
 import { HealthPage } from "./features/health/HealthPage";
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
 import { ReportsPage } from "./features/reports/ReportsPage";
@@ -22,6 +23,7 @@ export function AppRoutes() {
         <Route path="agents" element={<AgentsPage />} />
         <Route path="permissions" element={<PermissionsPage />} />
         <Route path="connections" element={<ConnectionsPage />} />
+        <Route path="connect" element={<ConnectPage />} />
         <Route path="schema" element={<SchemaPage />} />
         <Route path="health" element={<HealthPage />} />
         <Route path="reports" element={<ReportsPage />} />

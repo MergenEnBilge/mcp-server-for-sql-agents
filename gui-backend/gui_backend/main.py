@@ -27,6 +27,7 @@ from gui_backend.routers import (
     permissions,
     reports,
     schema,
+    server_info,
 )
 from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.http_security import SecurityHeaders
@@ -65,7 +66,17 @@ def create_app(
             allow_headers=["Authorization", "Content-Type"],
         )
 
-    for module in (me, audit, connections, agents, permissions, schema, health, reports):
+    for module in (
+        me,
+        audit,
+        connections,
+        agents,
+        permissions,
+        schema,
+        health,
+        reports,
+        server_info,
+    ):
         app.include_router(module.router)
 
     _add_health_routes(app, ctx)

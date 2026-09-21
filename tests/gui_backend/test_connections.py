@@ -119,6 +119,15 @@ async def test_engines_are_offered_for_the_dropdown(api):
     assert next(e for e in engines if e["engine"] == "postgresql")["default_port"] == 5432
 
 
+async def test_engines_say_whether_this_server_can_open_them(api):
+    engines = {
+        e["engine"]: e for e in (await api.client.get("/api/engines", headers=api.admin)).json()
+    }
+    assert engines["postgresql"]["available"] and engines["sqlite"]["available"]
+    for engine in engines.values():
+        assert (engine["unavailable_reason"] is None) == engine["available"]
+
+
 async def test_a_new_connection_starts_with_no_access_and_no_check(api, postgres):
     created = await create(api, new_connection(postgres))
     assert (created["access_count"], created["last_checked_at"], created["last_check_ok"]) == (
@@ -424,3 +433,30 @@ async def test_unknown_connections_are_404s(api):
             method, f"/api/connections/{missing}{path}", headers=api.admin, json={"details": {}}
         )
         assert response.status_code == 404, (method, path)
+
+
+# --- where agents connect --------------------------------------------------------------------------------
+
+
+async def test_the_connect_screen_is_told_the_public_address_and_where_the_guide_is(api):
+    api.ctx.settings.mcp_public_url = "https://mcp.example.com/mcp"
+    info = (await api.client.get("/api/server-info", headers=api.admin)).json()
+    assert info["mcp_url"] == "https://mcp.example.com/mcp"
+    assert info["guide_url"] == "https://mcp.example.com/agent-guide"
+    assert info["secure"] is True and info["issuer"]
+
+
+async def test_without_a_configured_address_it_says_so_instead_of_guessing(api):
+    api.ctx.settings.mcp_public_url = None
+    info = (await api.client.get("/api/server-info", headers=api.admin)).json()
+    assert (info["mcp_url"], info["guide_url"], info["secure"]) == (None, None, False)
+
+
+async def test_plain_http_is_reported_as_not_secure(api):
+    api.ctx.settings.mcp_public_url = "http://localhost:8000/mcp"
+    assert (await api.client.get("/api/server-info", headers=api.admin)).json()["secure"] is False
+
+
+async def test_only_administrators_see_it(api):
+    assert (await api.client.get("/api/server-info")).status_code == 401
+    assert (await api.client.get("/api/server-info", headers=api.member)).status_code == 403

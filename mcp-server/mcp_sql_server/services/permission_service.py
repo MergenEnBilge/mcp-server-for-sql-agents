@@ -101,10 +101,7 @@ class PermissionService:
         for the stdio transport (no OAuth client; trusted by whoever configured it)."""
         if caller.client_id is None:
             return None
-        agent = await self._store.get_agent(caller.client_id)
-        if agent is None:
-            await self.note_client(caller)
-            agent = await self._store.get_agent(caller.client_id)
+        agent = await self.find_agent(caller)
         if agent is None:
             raise AgentNotApproved(
                 "This agent could not be registered because too many are already waiting for "
@@ -115,6 +112,16 @@ class PermissionService:
             await self._touch(caller)
             return agent
         raise AgentNotApproved(_NOT_APPROVED[state])
+
+    async def find_agent(self, caller: Caller) -> AgentRecord | None:
+        """The caller's agent, registering it as pending if it has never been seen. None when
+        it is unknown and can't be registered either (too many are already waiting)."""
+        assert caller.client_id is not None
+        agent = await self._store.get_agent(caller.client_id)
+        if agent is None:
+            await self.note_client(caller)
+            agent = await self._store.get_agent(caller.client_id)
+        return agent
 
     async def note_client(self, caller: Caller, reported_name: str | None = None) -> None:
         """Record that this AI client acted for this person. A client seen for the first time

@@ -1133,7 +1133,81 @@ fieldset.choice legend {
   font-size: 12px;
 }
 
+.row-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.row-inline .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.paste {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
 .panel-sub {
   margin: 4px 0 0;
   font-size: 13px;
+}
+
+/* ---------- connect ---------- */
+
+.card {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.card p {
+  margin: 0;
+}
+
+.steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+ul.plain {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.copyable {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.copyable pre {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  background: var(--ground);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.guide {
+  display: grid;
+  gap: 10px;
 }

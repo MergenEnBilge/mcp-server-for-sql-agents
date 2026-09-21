@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Holders of this role (or a scope of the same name) may use the admin endpoints.
     admin_role: str = "admin"
 
+    # The address agents use to reach the MCP server (for example https://mcp.example.com/mcp).
+    # Only used to show it on the Connect screen.
+    mcp_public_url: str | None = None
+
     # Where the MCP server answers "is the process up?" (its /healthz). Optional: when unset,
     # the health screen says the check isn't configured instead of guessing.
     mcp_health_url: str | None = None

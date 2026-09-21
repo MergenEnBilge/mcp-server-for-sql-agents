@@ -21,7 +21,7 @@ from gui_backend.auth import Admin, ContextDep
 from gui_backend.changes import announce, log_change
 from gui_backend.connection_check import SECRET_LOOKING, check_connection
 from mcp_sql_server.services.connection_guard import check_host, resolve_sqlite_path
-from mcp_sql_server.services.connection_registry import DRIVERS
+from mcp_sql_server.services.connection_registry import DRIVERS, driver_problem
 
 router = APIRouter(prefix="/api", tags=["connections"])
 
@@ -52,6 +52,8 @@ class EngineInfo(BaseModel):
     label: str
     default_port: int | None
     required: list[str]
+    available: bool  # False when this server has no driver for it
+    unavailable_reason: str | None
 
 
 class ConnectionIn(BaseModel):
@@ -183,8 +185,16 @@ async def _fetch(ctx: Any, connection_id: UUID) -> ConnectionOut:
 
 @router.get("/engines")
 async def list_engines(_admin: Admin) -> list[EngineInfo]:
+    problems = {engine: driver_problem(engine) for engine in ENGINE_FIELDS}
     return [
-        EngineInfo(engine=e, label=i["label"], default_port=i["port"], required=i["required"])
+        EngineInfo(
+            engine=e,
+            label=i["label"],
+            default_port=i["port"],
+            required=i["required"],
+            available=problems[e] is None,
+            unavailable_reason=problems[e],
+        )
         for e, i in ENGINE_FIELDS.items()
     ]
 

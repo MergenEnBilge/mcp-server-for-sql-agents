@@ -164,3 +164,33 @@ test.describe("narrow windows", () => {
     await page.screenshot({ path: "test-results/narrow-audit.png" });
   });
 });
+
+test.describe("connecting agents", () => {
+  test("shows this server's own address and how to add it to a chatbot", async ({ page }) => {
+    await signIn(page, "alice", "/connect");
+    await expect(page.getByLabel("server address", { exact: true })).toContainText("https://localhost/mcp");
+    await page.screenshot({ path: "test-results/connect-1.png", fullPage: true });
+
+    await page.getByRole("button", { name: "Claude Code" }).click();
+    await expect(page.getByLabel("command", { exact: true })).toContainText("claude mcp add --transport http sql-data-layer https://localhost/mcp");
+  });
+
+  test("the guide written for agents is public and says what to do first", async ({ request }) => {
+    const guide = await request.get("/agent-guide");
+    expect(guide.ok()).toBeTruthy();
+    expect(guide.headers()["content-type"]).toContain("text/markdown");
+    expect(await guide.text()).toContain("get_my_access");
+  });
+
+  test("the connection form offers only the engines this server can open", async ({ page }) => {
+    await signIn(page, "alice", "/connections");
+    await page.getByRole("button", { name: "Add connection" }).first().click();
+    await expect(page.getByRole("option", { name: "PostgreSQL" })).not.toHaveAttribute("disabled");
+    // (Playwright's toBeDisabled doesn't look at <option> elements, so check the attribute.)
+    await expect(page.getByRole("option", { name: /SQL Server \(not installed\)/ })).toHaveAttribute("disabled", "");
+    await page.getByLabel(/Paste a connection string/).fill("postgresql://reader:secret@db.internal:5433/shop?ssl=require");
+    await page.getByRole("button", { name: "Fill in" }).click();
+    await expect(page.getByLabel(/^Host/)).toHaveValue("db.internal");
+    await expect(page.getByLabel(/^Driver options/)).toHaveValue("ssl=require");
+  });
+});

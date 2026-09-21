@@ -9,12 +9,15 @@ Descriptions come from two places. The curated ones an admin wrote in the GUI
 Both are untrusted text and both go through the sanitizer.
 """
 
+from mcp_sql_server.docs import GUIDE_URI
 from mcp_sql_server.errors import InvalidArgument
 from mcp_sql_server.models import (
+    AgentAccessInfo,
     Caller,
     ColumnDetail,
     ConnectionInfo,
     ForeignKeyDetail,
+    MyAccess,
     Relationship,
     SchemaSearchHit,
     SecurityFlag,
@@ -25,7 +28,7 @@ from mcp_sql_server.models import (
 from mcp_sql_server.services.audit_service import AuditService
 from mcp_sql_server.services.connection_registry import AdapterProvider
 from mcp_sql_server.services.meta_store import MetaStore
-from mcp_sql_server.services.permission_service import PermissionService
+from mcp_sql_server.services.permission_service import TOOL_NAMES, PermissionService
 from mcp_sql_server.services.sanitizer import OutputSanitizer
 from mcp_sql_server.services.tool_service import ToolService
 
@@ -44,6 +47,48 @@ class SchemaService(ToolService):
     ) -> None:
         super().__init__(permissions, adapters, audit, sanitizer)
         self._store = store
+
+    async def my_access(self, caller: Caller) -> MyAccess:
+        """What this caller may do right now. Available to everyone who is signed in, including an
+        agent that hasn't been approved: it is how an agent finds out why it is being refused, and
+        what to tell the person it works for. It only ever describes the caller's own access."""
+        async with self._audit.record(caller, "get_my_access", {}) as rec:
+            agent = await self._permissions.find_agent(caller) if caller.client_id else None
+            state = agent.state() if agent else ("pending" if caller.client_id else "approved")
+            info = (
+                AgentAccessInfo(
+                    client_id=agent.client_id,
+                    label=agent.label,
+                    state=state,
+                    allowed_tools=sorted(agent.allowed_tools),
+                    all_connections=agent.all_connections,
+                    expires_at=agent.expires_at,
+                )
+                if agent
+                else None
+            )
+
+            tools: list[str] = []
+            connections: list[str] = []
+            if state == "approved":
+                granted = await self._store.allowed_tools(caller.subjects())
+                ceiling = set(agent.allowed_tools) if agent else set(TOOL_NAMES)
+                tools = sorted(granted & ceiling)
+                records = await self._permissions.list_connections(caller, agent)
+                connections = [r.name for r in records]
+
+            status = _STATUS[state]
+            rec.summary = f"{status}; {len(tools)} tools, {len(connections)} connections"
+            return MyAccess(
+                user=caller.name or caller.sub,
+                roles=sorted(caller.roles),
+                agent=info,
+                status=status,
+                tools=["get_my_access", *tools] if state == "approved" else [],
+                connections=connections,
+                message=_NEXT_STEP.get(status) or _ready_message(tools, connections),
+                guide=GUIDE_URI,
+            )
 
     async def list_connections(self, caller: Caller) -> list[ConnectionInfo]:
         async with self._audit.record(caller, "list_connections", {}) as rec:
@@ -195,6 +240,44 @@ class SchemaService(ToolService):
             rec.tables = sorted({hit.table for hit in results})
             rec.summary = _summary(f"{len(results)} matches", flags)
             return results
+
+
+_STATUS = {
+    "approved": "ready",
+    "pending": "pending_approval",
+    "blocked": "blocked",
+    "expired": "expired",
+}
+
+_NEXT_STEP = {
+    "pending_approval": (
+        "This agent is waiting for an administrator to approve it in the admin console. Tell "
+        "the user, and call get_my_access again to check."
+    ),
+    "blocked": (
+        "An administrator has blocked this agent. Tell the user; nothing you do will change that."
+    ),
+    "expired": (
+        "This agent's approval has expired. Tell the user an administrator has to renew it."
+    ),
+}
+
+
+def _ready_message(tools: list[str], connections: list[str]) -> str:
+    if not tools:
+        return (
+            "This agent is approved, but the person you work for hasn't been granted any tools. "
+            "Tell them to ask an administrator."
+        )
+    if not connections:
+        return (
+            "You have tools, but no database you may use. Tell the person you work for to ask "
+            "an administrator for access to one."
+        )
+    return (
+        f"You can use {len(tools)} tools on {len(connections)} database(s). "
+        f"Read {GUIDE_URI} to get started."
+    )
 
 
 def _fk_detail(fk: Relationship) -> ForeignKeyDetail:

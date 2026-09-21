@@ -39,6 +39,9 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["mcp_sql_server*"]
 
+[tool.setuptools.package-data]
+mcp_sql_server = ["py.typed", "docs/*.md"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

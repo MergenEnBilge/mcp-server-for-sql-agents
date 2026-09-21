@@ -12,7 +12,11 @@ from cryptography.fernet import Fernet
 from mcp_sql_server.crypto import SecretBox
 from mcp_sql_server.errors import ConnectionUnavailable
 from mcp_sql_server.models import ConnectionRecord
-from mcp_sql_server.services.connection_registry import ConnectionRegistry, build_engine_url
+from mcp_sql_server.services.connection_registry import (
+    ConnectionRegistry,
+    build_engine_url,
+    driver_problem,
+)
 
 KEY = Fernet.generate_key().decode()
 SECRET_BOX = SecretBox(KEY)
@@ -72,6 +76,25 @@ def test_sqlite_uses_a_file_path_and_no_credentials(tmp_path):
 def test_driver_options_are_passed_through():
     url = build_engine_url(record(details={"host": "h", "options": {"sslmode": "require"}}), "p")
     assert dict(url.query) == {"sslmode": "require"}
+
+
+def test_sql_server_gets_a_default_odbc_driver_unless_one_is_given():
+    details = {"host": "h", "database": "d", "username": "u"}
+    assert build_engine_url(record("mssql", details), "p").query == {
+        "driver": "ODBC Driver 18 for SQL Server"
+    }
+    chosen = {**details, "options": {"driver": "ODBC Driver 17 for SQL Server", "Encrypt": "yes"}}
+    assert dict(build_engine_url(record("mssql", chosen), "p").query) == {
+        "driver": "ODBC Driver 17 for SQL Server",
+        "Encrypt": "yes",
+    }
+
+
+def test_an_engine_whose_driver_is_missing_says_so(monkeypatch):
+    assert driver_problem("sqlite") is None
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
+    assert "'aiomysql' driver isn't installed" in (driver_problem("mysql") or "")
+    assert driver_problem("oracle") == "This engine isn't supported."
 
 
 def test_an_unknown_engine_is_an_error():

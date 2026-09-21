@@ -311,3 +311,24 @@ async def test_a_caller_who_makes_too_many_calls_is_told_to_wait(postgres, ferne
         # Somebody else is not affected by it.
         async with mcp_client(server, idp.token(sub="other-user")) as other:
             assert not (await other.call_tool("list_connections", {})).is_error
+
+
+@REGISTERED
+def test_the_agent_guide_can_be_read_without_signing_in(running):
+    response = httpx.get(f"{running.url}/agent-guide")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert "get_my_access" in response.text and "read-only" in response.text
+
+
+@REGISTERED
+async def test_an_agent_over_http_can_find_out_it_is_waiting_for_approval(
+    postgres, fernet_key, idp
+):
+    with serve(postgres, fernet_key, idp) as server:
+        token = idp.token(extra={"azp": f"waiting-{uuid.uuid4().hex[:8]}"})
+        async with mcp_client(server, token) as client:
+            access = (await client.call_tool("get_my_access", {})).structured_content
+            assert access["status"] == "pending_approval"
+            guide = await client.read_resource("sql-data-layer://guide")
+            assert "How to work" in guide.contents[0].text

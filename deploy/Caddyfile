@@ -54,6 +54,11 @@
 		reverse_proxy mcp-server:8000
 	}
 
+	# The guide agents can read before they connect (also offered as an MCP resource).
+	handle /agent-guide {
+		reverse_proxy mcp-server:8000
+	}
+
 	# Everything else is the admin console (a single-page app).
 	handle {
 		header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"

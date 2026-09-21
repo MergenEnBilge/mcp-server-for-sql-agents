@@ -199,6 +199,28 @@ class QueryResult(BaseModel):
     security_flags: list[SecurityFlag] = Field(default_factory=list)
 
 
+class AgentAccessInfo(BaseModel):
+    client_id: str
+    label: str = ""
+    state: AgentState
+    allowed_tools: list[str]
+    all_connections: bool  # False: limited to some databases (the ones listed under connections)
+    expires_at: datetime | None = None
+
+
+class MyAccess(BaseModel):
+    """What the caller may do right now, for the caller to read."""
+
+    user: str
+    roles: list[str]
+    agent: AgentAccessInfo | None  # None for the local stdio transport, which has no agents
+    status: Literal["ready", "pending_approval", "blocked", "expired"]
+    tools: list[str]  # tools you can call right now
+    connections: list[str]  # databases you can use right now
+    message: str  # what to do next, in words
+    guide: str  # where the documentation is
+
+
 class PlanResult(BaseModel):
     plan: str
     estimated_cost: float | None = None

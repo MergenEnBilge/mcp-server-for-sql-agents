@@ -8,8 +8,9 @@ import { buildDetails } from "./ConnectionForm";
 import { ConnectionsPage } from "./ConnectionsPage";
 
 const engines: EngineInfo[] = [
-  { engine: "postgresql", label: "PostgreSQL", default_port: 5432, required: ["host", "database", "username"] },
-  { engine: "sqlite", label: "SQLite (file)", default_port: null, required: ["path"] },
+  { engine: "postgresql", label: "PostgreSQL", default_port: 5432, required: ["host", "database", "username"], available: true, unavailable_reason: null },
+  { engine: "sqlite", label: "SQLite (file)", default_port: null, required: ["path"], available: true, unavailable_reason: null },
+  { engine: "mssql", label: "SQL Server", default_port: 1433, required: ["host", "database", "username"], available: false, unavailable_reason: "Microsoft's ODBC driver for SQL Server isn't installed in this server." },
 ];
 
 const shop: Connection = {
@@ -103,6 +104,58 @@ describe("connection manager", () => {
   });
 });
 
+describe("adapters and driver options", () => {
+  it("offers only engines this server can open, and says why the others can't be used", async () => {
+    const { api } = fakeApi(routes());
+    renderScreen(<ConnectionsPage />, api);
+    await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
+    expect(screen.getByRole("option", { name: "SQL Server (not installed)" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "PostgreSQL" })).toBeEnabled();
+  });
+
+  it("fills the fields from a pasted connection string and moves the password out of sight", async () => {
+    const { api } = fakeApi(routes());
+    renderScreen(<ConnectionsPage />, api);
+    await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
+
+    await userEvent.type(screen.getByLabelText(/Paste a connection string/), "postgresql://reader:p%40ss@db.internal:5433/shop?ssl=require");
+    await userEvent.click(screen.getByRole("button", { name: "Fill in" }));
+
+    expect(screen.getByLabelText(/^Host/)).toHaveValue("db.internal");
+    expect(screen.getByLabelText(/^Port/)).toHaveValue("5433");
+    expect(screen.getByLabelText(/^Database/)).toHaveValue("shop");
+    expect(screen.getByLabelText(/^User/)).toHaveValue("reader");
+    expect(screen.getByLabelText(/^Driver options/)).toHaveValue("ssl=require");
+    expect(screen.getByLabelText(/^Password/)).toHaveValue("p@ss");
+    expect(screen.getByLabelText(/Paste a connection string/)).toHaveValue(""); // not left on screen
+    expect(screen.getByText(/password went into the password field/)).toBeInTheDocument();
+  });
+
+  it("says what is wrong with a connection string it can't read", async () => {
+    const { api } = fakeApi(routes());
+    renderScreen(<ConnectionsPage />, api);
+    await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
+    await userEvent.type(screen.getByLabelText(/Paste a connection string/), "oracle://u:p@h/db");
+    await userEvent.click(screen.getByRole("button", { name: "Fill in" }));
+    expect(await screen.findByText(/isn't an engine this console knows/)).toBeInTheDocument();
+  });
+
+  it("sends driver options with the settings", async () => {
+    const post = vi.fn();
+    const { api } = fakeApi(routes({ "POST /connections/test": (_p: unknown, body: unknown) => (post(body), { ok: true, message: "Connected.", table_count: 1, latency_ms: 3 }) }));
+    renderScreen(<ConnectionsPage />, api);
+    await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
+    await userEvent.type(screen.getByLabelText(/^Name/), "shop-pg");
+    await userEvent.type(screen.getByLabelText(/^Host/), "h");
+    await userEvent.type(screen.getByLabelText(/^Database/), "d");
+    await userEvent.type(screen.getByLabelText(/^User/), "u");
+    await userEvent.type(screen.getByLabelText(/^Driver options/), "ssl=require");
+    await userEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0]![0].details.options).toEqual({ ssl: "require" });
+  });
+});
+
 describe("buildDetails", () => {
   const blank = { host: "", port: "", database: "", username: "", path: "", schemas: "" };
 
@@ -113,6 +166,12 @@ describe("buildDetails", () => {
 
   it("splits schemas on commas and ignores blanks", () => {
     expect(buildDetails("postgresql", { ...blank, host: "h", database: "d", username: "u", schemas: "sales, , hr" })).toMatchObject({ schemas: ["sales", "hr"] });
+  });
+
+  it("includes driver options only when there are some", () => {
+    const base = { ...blank, host: "h", database: "d", username: "u" };
+    expect(buildDetails("postgresql", base)).not.toHaveProperty("options");
+    expect(buildDetails("postgresql", { ...base, options: "ssl=require\n\nfoo = bar " })).toMatchObject({ options: { ssl: "require", foo: "bar" } });
   });
 
   it("uses only the path for SQLite", () => {
