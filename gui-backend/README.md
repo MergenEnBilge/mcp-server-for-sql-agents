@@ -44,6 +44,7 @@ A signed-in person who isn't an administrator can only ask `/api/me`.
 | Audit log | `GET /api/audit` (filter by user, tool, connection, table, outcome, date, text; sort; page), `GET /api/audit/{id}`, `GET /api/audit/facets`, `GET /api/admin-log` |
 | Connections | `GET/POST /api/connections`, `GET/PUT/DELETE /api/connections/{id}`, `POST /api/connections/{id}/test`, `POST /api/connections/test`, `GET/PUT /api/connections/{id}/access`, `GET /api/engines` |
 | Permissions | `GET/POST /api/permissions/subjects`, `GET/PUT /api/permissions/tables`, `GET/PUT /api/permissions/tools` |
+| Schema descriptions | `GET /api/schema/tables`, `GET /api/schema/table`, `PUT/DELETE /api/schema/description` |
 | Ops | `GET /healthz` (process is up), `GET /readyz` (database reachable) |
 
 ## Guarantees worth knowing about
@@ -55,6 +56,9 @@ A signed-in person who isn't an administrator can only ask `/api/me`.
   The log is append-only: this service's database role can add and read entries, never edit or delete.
 - **Changes take effect immediately.** After committing, the API bumps a version counter in Redis that
   the MCP server includes in its cache keys, so a revoked permission doesn't wait for a cache to expire.
+- **Descriptions are checked for prompt injection as they are written.** Saving text that reads like an
+  instruction to an AI ("ignore your previous instructions...") is allowed but comes back with the rule
+  it tripped, because the MCP server withholds such text and the editor should say so.
 - **A health check isn't an edit.** Testing a connection records the result without touching the
   connection's `updated_at`, which the MCP server watches to know when to rebuild its connection pool.
 - **Failures say what to fix.** "Connection failed: could not reach host db on port 5432." rather than a
