@@ -217,7 +217,9 @@ def _main() -> None:
                 engine,
                 secret_box,
                 postgres=PostgresTarget(
-                    host="localhost",
+                    # 127.0.0.1, not "localhost": on Windows the latter tries IPv6 first, and
+                    # Docker's published ports are IPv4 only, so every connection would stall.
+                    host="127.0.0.1",
                     port=int(os.environ.get("POSTGRES_PORT", "5432")),
                     database="org_data",
                     username="org_readonly",

@@ -345,3 +345,49 @@ async def test_a_redis_outage_is_absorbed(caplog):
     with caplog.at_level("ERROR"):
         await cache.bump(META)  # doesn't raise, but is logged loudly
     assert "stale entries may be served" in caplog.text
+
+
+class CountingDeadRedis(DeadRedis):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def get(self, *_a, **_k):
+        self.calls += 1
+        raise RedisConnectionError("connection refused")
+
+    set = incr = ping = get
+
+
+async def test_after_one_failure_redis_is_left_alone_for_a_while(monkeypatch):
+    """Otherwise every request would wait through several timeouts, and a cache outage would
+    become a whole-service slowdown."""
+    from mcp_sql_server.cache import redis_cache
+
+    now = [1000.0]
+    monkeypatch.setattr(redis_cache.time, "monotonic", lambda: now[0])
+    client = CountingDeadRedis()
+    cache = RedisCache(client)  # type: ignore[arg-type]
+
+    assert await cache.get("k") is None  # notices the failure
+    assert client.calls == 1
+    for _ in range(5):
+        assert await cache.get("k") is None
+        assert await cache.version(META) is None
+        await cache.set("k", "v", 5)
+    assert client.calls == 1  # nothing further touched Redis
+
+    now[0] += redis_cache.COOLDOWN_S + 1  # the cooldown passes
+    await cache.get("k")
+    assert client.calls == 2  # so it tries again
+
+
+async def test_invalidation_is_still_attempted_during_a_cooldown(monkeypatch):
+    from mcp_sql_server.cache import redis_cache
+
+    now = [1000.0]
+    monkeypatch.setattr(redis_cache.time, "monotonic", lambda: now[0])
+    client = CountingDeadRedis()
+    cache = RedisCache(client)  # type: ignore[arg-type]
+    await cache.get("k")  # trips the breaker
+    await cache.bump(META)
+    assert client.calls == 2
