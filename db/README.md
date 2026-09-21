@@ -126,7 +126,8 @@ docker exec -e PGPASSWORD=<ORG_READONLY_PASSWORD> mcp-sql-dev-postgres-1 \
 ## Registering the sample databases
 
 The MCP server finds databases through `app_meta.connections`, so the two sample databases have to be
-registered there. Until the admin GUI exists, a small script does it:
+registered there. In the admin console you would do that on the Connections screen; for local development
+a small script does it in one step:
 
 ```bash
 cd mcp-server && python -m mcp_sql_server.devtools.seed

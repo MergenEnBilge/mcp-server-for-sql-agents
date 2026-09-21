@@ -126,6 +126,20 @@ What it does:
 - It is **stateless**: no session lives in the process, so replicas can sit behind a load balancer
   with no sticky sessions. `/healthz` is public and only says the process is up.
 
+## Running in Docker
+
+`mcp-server/Dockerfile` builds an image that serves the HTTP transport as a non-root user. Build it from
+the repository root (it is one of the services in `docker-compose.yml`):
+
+```bash
+docker build -f mcp-server/Dockerfile -t mcp-sql-server .
+```
+
+The MySQL/MariaDB driver is included. To build a different set of drivers, pass `--build-arg EXTRAS=...`
+(for example `EXTRAS=mysql,mssql`). SQL Server also needs Microsoft's ODBC driver installed in the image
+(`msodbcsql18` and `unixodbc`), so that means a derived image; the MySQL and SQL Server paths are not part
+of the automated tests, so try them against a test database first.
+
 Settings (all `MCP_`-prefixed environment variables):
 
 | Variable | Meaning |
