@@ -5,7 +5,9 @@ import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { Shell } from "./components/Shell";
 import { ErrorNote } from "./components/ui";
 import { AuditPage } from "./features/audit/AuditPage";
+import { ConnectionsPage } from "./features/connections/ConnectionsPage";
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
+import { SchemaPage } from "./features/schema/SchemaPage";
 
 /** The routes, for an already signed-in person. Tests render this with their own providers. */
 export function AppRoutes() {
@@ -15,6 +17,8 @@ export function AppRoutes() {
         <Route index element={<Navigate to="/audit" replace />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="permissions" element={<PermissionsPage />} />
+        <Route path="connections" element={<ConnectionsPage />} />
+        <Route path="schema" element={<SchemaPage />} />
         <Route path="*" element={<Navigate to="/audit" replace />} />
       </Route>
     </Routes>

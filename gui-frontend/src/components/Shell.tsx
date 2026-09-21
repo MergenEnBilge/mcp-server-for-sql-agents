@@ -10,6 +10,8 @@ import { ErrorNote, PageHead } from "./ui";
 export const NAV = [
   { to: "/audit", label: "Audit log" },
   { to: "/permissions", label: "Permissions" },
+  { to: "/connections", label: "Connections" },
+  { to: "/schema", label: "Schema" },
 ] as const;
 
 /**

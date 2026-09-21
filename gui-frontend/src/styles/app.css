@@ -645,3 +645,225 @@ dialog.modal::backdrop {
   border-top: 1px solid var(--rule);
   background: var(--ground);
 }
+
+/* ---------- list + side panel (connections, reports) ---------- */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.split.with-panel {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+@media (max-width: 1100px) {
+  .split.with-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule);
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+.field {
+  display: grid;
+  gap: 3px;
+}
+
+.field > span:first-child {
+  font-weight: 500;
+}
+
+.field .hint {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.field .input,
+.field .select,
+.field textarea {
+  width: 100%;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--fault);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.clip {
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- schema editor ---------- */
+
+.editor-split {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .editor-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.table-list {
+  display: grid;
+  gap: 8px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+
+.table-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.table-list li {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+}
+
+.table-list li > button:first-child {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-list li > button:first-child:hover {
+  background: var(--paper);
+}
+
+.table-list li > button[aria-current="true"] {
+  border-left-color: var(--ink);
+  background: var(--paper);
+}
+
+.table-list .meta {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+h3.section {
+  margin: 18px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.schema-columns th[scope="row"] {
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.schema-columns td:last-child {
+  width: 55%;
+}
+
+.editable {
+  display: grid;
+  gap: 6px;
+}
+
+.editable-view {
+  display: flex;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+  cursor: text;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editable-view:hover {
+  border-color: var(--rule);
+  background: var(--paper);
+}
+
+.editable-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.editable textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.unsaved {
+  color: var(--pending);
+  font-weight: 600;
+}
+
+.saved-mark {
+  color: var(--live);
+  font-weight: 600;
+  white-space: nowrap;
+}

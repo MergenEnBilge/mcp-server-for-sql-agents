@@ -96,3 +96,67 @@ export interface ToolGrid {
   subjects: Subject[];
   grants: { subject_type: SubjectType; subject_id: string; tool: string }[];
 }
+
+export interface EngineInfo {
+  engine: string;
+  label: string;
+  default_port: number | null;
+  required: string[];
+}
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  message: string;
+  table_count: number | null;
+  latency_ms: number | null;
+}
+
+export interface SchemaTable {
+  name: string;
+  kind: string;
+  description: string;
+  described_columns: number;
+  missing: boolean;
+}
+
+export interface SchemaTableList {
+  connection_id: string;
+  connection_name: string;
+  reachable: boolean;
+  error: string | null;
+  tables: SchemaTable[];
+}
+
+export interface SchemaColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  primary_key: boolean;
+  db_comment: string | null;
+  description: string;
+  updated_at: string | null;
+  updated_by: string | null;
+  withheld_rule: string | null;
+}
+
+export interface SchemaTableDetail {
+  connection_id: string;
+  name: string;
+  kind: string;
+  db_comment: string | null;
+  description: string;
+  updated_at: string | null;
+  updated_by: string | null;
+  withheld_rule: string | null;
+  columns: SchemaColumn[];
+  foreign_keys: { columns: string[]; to_table: string; to_columns: string[] }[];
+}
+
+export interface DescriptionSaved {
+  table: string;
+  column: string | null;
+  description: string;
+  updated_at: string;
+  updated_by: string | null;
+  withheld_rule: string | null;
+}
