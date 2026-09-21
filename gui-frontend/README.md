@@ -44,6 +44,17 @@ src/
   styles/       design tokens, base styles, component styles
 ```
 
+The screens are Audit log, **Agents** (every AI client that has connected, with what it may do),
+Permissions, Connections, **Connect** (how to add this server to a chatbot or tool), Schema, Health
+and Reports.
+
+**The approval pop-up.** The console asks the API every few seconds whether a new AI client is waiting
+(and not while the tab is hidden). When one is, a dialog opens on whatever screen the administrator is
+on: who is asking (what it calls itself, marked as not verified, its client id, the person it acts for),
+then the choices: schema only or full read access, which databases, and for how long, with **Allow**,
+**Block** and **Decide later**. Until it is decided the agent is refused everything. The menu also
+shows how many are waiting.
+
 Tables are real `<table>` elements, the permission toggles are real checkboxes, and every screen works
 from the keyboard. Changes to permissions and descriptions are staged and saved explicitly; nothing is
 written by clicking a cell.

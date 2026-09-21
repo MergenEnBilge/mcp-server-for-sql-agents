@@ -105,6 +105,10 @@ services:
       KEYCLOAK_URL: http://keycloak:8080/auth
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       MCP_AUDIENCE: https://${PUBLIC_HOST:-localhost}/mcp
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+      # Which sites a chatbot's redirect address may be on when it registers itself.
+      KEYCLOAK_DCR_TRUSTED_HOSTS: ${KEYCLOAK_DCR_TRUSTED_HOSTS:-claude.ai,claude.com,chatgpt.com,platform.openai.com,vscode.dev,insiders.vscode.dev,localhost,127.0.0.1}
+      KEYCLOAK_DCR_MAX_CLIENTS: ${KEYCLOAK_DCR_MAX_CLIENTS:-1000}
     depends_on:
       - keycloak
     restart: "no"

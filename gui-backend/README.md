@@ -1,8 +1,9 @@
 # gui-backend
 
-The REST API behind the admin console. It is where administrators decide **who may use which
-database, table and tool**, look back over **what AI callers have been doing**, and (later
-screens) edit the schema descriptions the model reads and watch the system's health.
+The REST API behind the admin console. It is where administrators decide **which AI clients may
+connect and what they may do**, **who may use which database, table and tool**, look back over **what
+AI callers have been doing**, edit the schema descriptions the model reads, and watch the system's
+health.
 
 It doesn't talk to the target databases on behalf of AI callers; that is the MCP server's job.
 The two share one Postgres (`app_meta`) and, through it, one set of rules.
@@ -24,6 +25,8 @@ Settings come from `GUI_`-prefixed environment variables (see `.env.example`):
 | `GUI_ADMIN_ROLE` | role (or scope) that grants admin access. Default `admin` |
 | `GUI_REDIS_URL` | optional; lets a change made here invalidate the MCP server's caches instantly |
 | `GUI_MCP_HEALTH_URL` | optional; the MCP server's `/healthz`, so the health screen can say whether it is up |
+| `GUI_MCP_PUBLIC_URL` | optional; the address agents connect to, shown on the Connect screen |
+| `GUI_SQLITE_ROOT` | SQLite databases must be inside this folder (same rule as the MCP server's); without it SQLite connections are refused |
 | `GUI_CORS_ORIGINS` | only needed in development, when the UI runs on its own port |
 
 ## How sign-in works
@@ -43,7 +46,9 @@ A signed-in person who isn't an administrator can only ask `/api/me`.
 |---|---|
 | Session | `GET /api/me` |
 | Audit log | `GET /api/audit` (filter by user, tool, connection, table, outcome, date, text; sort; page), `GET /api/audit/{id}`, `GET /api/audit/facets`, `GET /api/admin-log` |
-| Connections | `GET/POST /api/connections`, `GET/PUT/DELETE /api/connections/{id}`, `POST /api/connections/{id}/test`, `POST /api/connections/test`, `GET/PUT /api/connections/{id}/access`, `GET /api/engines` |
+| Agents | `GET /api/agents`, `GET /api/agents/pending` (the console polls this for the pop-up), `GET /api/agents/options`, `POST /api/agents` (approve before it connects), `POST /api/agents/{id}/approve` (also changes or renews), `POST /api/agents/{id}/block`, `DELETE /api/agents/{id}` |
+| Connections | `GET/POST /api/connections`, `GET/PUT/DELETE /api/connections/{id}`, `POST /api/connections/{id}/test`, `POST /api/connections/test`, `GET/PUT /api/connections/{id}/access`, `GET /api/engines` (says which engines this server can open) |
+| Server | `GET /api/server-info`: the address agents connect to, for the Connect screen |
 | Permissions | `GET/POST /api/permissions/subjects`, `GET/PUT /api/permissions/tables`, `GET/PUT /api/permissions/tools` |
 | Schema descriptions | `GET /api/schema/tables`, `GET /api/schema/table`, `PUT/DELETE /api/schema/description` |
 | Health | `GET /api/health?hours=24`: database, pool, Redis and MCP server status; error rate and p95 `run_query` latency from the audit log, plus a time series |
@@ -55,6 +60,9 @@ A signed-in person who isn't an administrator can only ask `/api/me`.
 - **Credentials go in and never come out.** A connection's password is encrypted before it is stored,
   responses only say whether one exists, and it never appears in the admin log. A secret can't be
   hidden in the plain-text settings either: names like `password` or `token` are refused there.
+- **Only this API can approve an agent.** The MCP server's database role may add a pending row and
+  refresh who and when, and nothing else, so a compromised MCP server can't approve itself. Approvals
+  are caps: an agent never gets more than the person using it.
 - **Every change is recorded** in `admin_log` (who, what, when), in the same transaction as the change.
   The log is append-only: this service's database role can add and read entries, never edit or delete.
 - **Changes take effect immediately.** After committing, the API bumps a version counter in Redis that
@@ -64,6 +72,9 @@ A signed-in person who isn't an administrator can only ask `/api/me`.
   it tripped, because the MCP server withholds such text and the editor should say so.
 - **A health check isn't an edit.** Testing a connection records the result without touching the
   connection's `updated_at`, which the MCP server watches to know when to rebuild its connection pool.
+- **Databases can only point where they should.** A SQLite file must be inside the configured folder,
+  and link-local and cloud-metadata addresses are refused as hosts, both when saving and when opening.
+- **Answers are never cached.** Responses carry `Cache-Control: no-store`.
 - **Failures say what to fix.** "Connection failed: could not reach host db on port 5432." rather than a
   driver stack trace, and never with the password in it.
 

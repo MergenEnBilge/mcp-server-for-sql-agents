@@ -123,13 +123,24 @@ async def list_agents(ctx: ContextDep, _admin: Admin) -> list[AgentOut]:
         return [AgentOut(**r) for r in (await db.execute(text(_SELECT + _ORDER))).mappings()]
 
 
+# A request nobody has seen for this long is probably a client that was deleted or a test that
+# never came back. It stops popping up (and counting in the menu), but stays in the Agents list
+# to be decided or removed.
+STALE_AFTER_DAYS = 7
+
+
 @router.get("/pending")
 async def pending(ctx: ContextDep, _admin: Admin) -> PendingOut:
     """The requests waiting for a decision. The console polls this so a new one pops up."""
     async with ctx.engine.connect() as db:
         rows = (
             await db.execute(
-                text(_SELECT + " WHERE a.status = 'pending' ORDER BY a.first_seen_at LIMIT 50")
+                text(
+                    _SELECT
+                    + " WHERE a.status = 'pending' AND a.last_seen_at > "
+                    + "now() - make_interval(days => :days) ORDER BY a.first_seen_at LIMIT 50"
+                ),
+                {"days": STALE_AFTER_DAYS},
             )
         ).mappings()
         agents = [AgentOut(**r) for r in rows]

@@ -105,6 +105,17 @@ time-series lines. No metrics wall.
 
 **Saved reports.** A plain table and a side panel. Deliberately unfinished.
 
+**Agents and the approval pop-up.** The one place the console interrupts. A new AI client can't do
+anything until a person decides, so the decision comes to them: a modal dialog opens on whatever
+screen they are on, with the facts first (who is asking, marked "not verified" where the agent chose
+its own name) and the choices below, starting from the safest one (schema only, 30 days). It is a modal
+because a decision is needed, and it can be put off ("Decide later") without deciding anything. The
+menu keeps a count in amber, the colour for "the screen and the database disagree". Requests nobody has
+seen for a week stop interrupting, but stay in the list.
+
+**Connect.** Plain cards, no illustrations: the address with a copy button, what happens on first
+connection, and the steps for each kind of client.
+
 ## Principles
 
 1. **Consequential changes are staged and named.** Toggling access, saving a connection or editing a

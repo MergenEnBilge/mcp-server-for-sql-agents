@@ -49,7 +49,7 @@ table-level grants on `app_meta` are made by the migration.
 | Role           | Can do | Cannot do |
 |----------------|--------|-----------|
 | `meta_owner`   | Owns `app_meta`; runs migrations | – |
-| `mcp_app`      | Read every config table; append rows to `audit_log` | Change config, read or edit the audit log, connect to `org_data` |
+| `mcp_app`      | Read every config table; append rows to `audit_log`; add a *pending* row to `agents` and refresh who and when it was seen | Change config, approve an agent, read or edit the audit log, connect to `org_data` |
 | `gui_app`      | Full control of config tables; read `audit_log` | Write, edit or delete audit rows, connect to `org_data` |
 | `org_owner`    | Owns the sample `org_data` (dev only) | – |
 | `org_readonly` | `SELECT` on `org_data`, nothing else | Write, create tables (even temp ones), connect to `app_meta` |
@@ -86,6 +86,18 @@ Column-level notes live in the database itself (`\d+ connections` in psql).
   arguments, timing, and the outcome. `connection_name` is plain text (not a foreign key) so the history
   survives a connection being renamed or deleted.
 - **`saved_reports`**: a stub for the future BI app. Deleting a connection that still has reports is refused.
+
+Added by [`0002`](migrations/versions/0002_subjects_admin_log_and_health.py) and
+[`0003`](migrations/versions/0003_agents.py):
+
+- **`known_subjects`**, **`admin_log`**: the users and roles the system has seen, and an append-only record
+  of every change an administrator made.
+- **`agents`**, **`agent_connections`**: the AI clients that have connected, identified by their OAuth
+  client id. A new one is `pending` and can do nothing. An administrator approves it with a ceiling
+  (tools, databases, an optional end date); what it can do is that ceiling *and* what the person using
+  it may do. The MCP server's role can only insert a pending row and update `last_seen_at`,
+  `last_user_*` and `reported_name`: those are the only columns it is granted.
+- **`audit_log.client_id`** records which agent made each call.
 
 ## Sample data
 

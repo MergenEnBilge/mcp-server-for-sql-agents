@@ -1,8 +1,9 @@
 # mcp-server
 
 The part of the project that sits between an LLM and your databases: an MCP server with eight
-read-only tools. The real logic lives in a **service layer** that can be used and tested with no
-MCP and no network involved; the MCP tools are a thin wrapper over it.
+read-only data tools and one that tells an agent what it may do. The real logic lives in a **service
+layer** that can be used and tested with no MCP and no network involved; the MCP tools are a thin
+wrapper over it.
 
 ## How it's layered
 
@@ -10,7 +11,8 @@ MCP and no network involved; the MCP tools are a thin wrapper over it.
    tools/ (MCP tools)                 <- thin: translate MCP calls into service calls
             │
    services/                          <- all the real logic: who may do what, is this SQL safe,
-   ├─ permission_service                 what came back, what to write in the audit log
+   ├─ permission_service (is this AI client approved? may this person do it?)
+   │                                     what came back, what to write in the audit log
    ├─ schema_service    (list_tables, describe_table, get_relationships, search_schema, ...)
    ├─ query_service     (run_query, explain_query, get_sample_rows)
    ├─ query_validator   (is this one read-only SELECT? which tables does it read?)
@@ -22,6 +24,9 @@ MCP and no network involved; the MCP tools are a thin wrapper over it.
    adapters/                          <- one class per kind of database
    ├─ base.py            DBAdapter: the contract the services depend on
    └─ sqlalchemy_adapter.py   works for Postgres, MySQL, SQL Server, SQLite from a URL alone
+
+   auth/                              <- who is calling: token checks, and noticing new AI clients
+   docs/                              <- the guide agents read (Markdown, shipped in the package)
 ```
 
 Adding a new kind of database means writing a new `DBAdapter` subclass. Nothing in the
@@ -41,6 +46,9 @@ one doesn't open a hole.
 | Time limit (default 5s) | Passed to the adapter | Postgres `statement_timeout`; SQLite aborts the query at the deadline; MySQL `max_execution_time` |
 | Audit trail | One row per call, refused ones included. If the row can't be saved, the result is withheld | The `mcp_app` role can append to the log but not read, edit or delete it |
 | Untrusted output | Cell text that reads like instructions to an AI is withheld and reported; invisible characters stripped; long text cut | – |
+| Which AI clients may connect | A client is refused everything until an administrator approves it, and what it may do is capped by that approval as well as by the person it acts for | The MCP server's database role can add a *pending* client and refresh who and when; it has no right to write the columns that approve one |
+| Fair use | Calls per minute and calls at once, per person (shared through Redis when it is there) | – |
+| Where a database may point | SQLite files only inside `MCP_SQLITE_ROOT`; link-local and metadata addresses refused as hosts | – |
 | Secrets | Connection passwords are Fernet-encrypted at rest, decrypted in memory only to open a connection, never logged | The key is in the environment, not in the database |
 
 Error messages are written to be shown to the LLM, so they're deliberately vague where
@@ -97,10 +105,48 @@ database URL and key are the ones from your `.env`):
 With the sample data seeded (`python -m mcp_sql_server.devtools.seed`), try asking: *"Which product
 categories have the most products? Use the shop-sqlite database."*
 
-The eight tools are `list_connections`, `list_tables`, `describe_table`, `search_schema`,
-`get_relationships`, `run_query`, `explain_query` and `get_sample_rows`. All of them are marked
-read-only, and the server's instructions tell the model that text coming out of a database is data,
-never instructions.
+The tools are `list_connections`, `list_tables`, `describe_table`, `search_schema`,
+`get_relationships`, `run_query`, `explain_query` and `get_sample_rows`, plus `get_my_access`. All of
+them are marked read-only, and the server's instructions tell the model that text coming out of a
+database is data, never instructions.
+
+stdio has no OAuth client, so it has no agent to approve: whoever writes the configuration is trusted
+to decide who the server acts as.
+
+## What agents are told
+
+Agents shouldn't have to guess how to use this. The server tells them in four ways:
+
+- **Instructions**, sent when a client connects: the order of work, the limits, that database text is
+  data, and to call `get_my_access` when unsure.
+- **`get_my_access`**, a tool that is always allowed. It says whether the agent is approved, which
+  tools and databases it has right now, and what to tell the person if something is missing. An agent
+  that hasn't been approved yet can still call it, which is how it finds out why it is being refused.
+- **Resources** (`sql-data-layer://guide`, `://dialects`, `://errors`): a short guide, SQL notes per
+  engine, and what each error message means. The text is in [mcp_sql_server/docs](mcp_sql_server/docs);
+  a test keeps it in step with the code.
+- **Prompts** (`explore_database`, `answer_data_question`, `check_my_access`), which clients that list
+  prompts show as shortcuts.
+
+The guide is also served without signing in at `/agent-guide`, so it can be read before connecting.
+
+## Which AI clients may connect
+
+Over HTTP, the OAuth client in the token (its `azp` claim) identifies the AI client, and the identity
+provider sets it, so the agent can't choose it. A client seen for the first time is recorded as
+`pending` and every tool refuses it with a message that tells the model to ask the user to have an
+administrator approve it. The admin console shows the request as a pop-up (see
+[gui-frontend](../gui-frontend/README.md)); the administrator allows it with a ceiling of tools, databases
+and a duration, or blocks it.
+
+What an agent can do is the overlap of two things: what it was approved for, and what the signed-in
+person is allowed. It can never exceed either. The client is noticed as soon as it introduces itself
+(an `initialize` request, or the client info that newer protocol revisions send with every request),
+so the request appears before the agent has tried anything. The name it gives is shown to the
+administrator as a hint only.
+
+Approvals are checked on every call, cached for a minute, and the cache is dropped the moment the
+console changes one, so blocking an agent takes effect straight away.
 
 ## Serving over HTTP with OAuth 2.1
 
@@ -123,6 +169,11 @@ What it does:
   If the provider can't be reached, new tokens are refused rather than waved through.
 - The token's subject and roles become the caller the services authorize and audit, so a person has
   the same permissions here as in the admin GUI. Tool arguments can't change who the caller is.
+- The `Host` and `Origin` headers of every request are checked against the server's own address
+  (DNS-rebinding protection, which the MCP specification requires). Request bodies are capped at
+  256 KB and responses are marked `no-store`.
+- Clients that don't have a client set up in advance (online chatbots) register themselves through the
+  identity provider's dynamic client registration; see [docs/connecting-agents.md](../docs/connecting-agents.md).
 - It is **stateless**: no session lives in the process, so replicas can sit behind a load balancer
   with no sticky sessions. `/healthz` is public and only says the process is up.
 
@@ -136,9 +187,9 @@ docker build -f mcp-server/Dockerfile -t mcp-sql-server .
 ```
 
 The MySQL/MariaDB driver is included. To build a different set of drivers, pass `--build-arg EXTRAS=...`
-(for example `EXTRAS=mysql,mssql`). SQL Server also needs Microsoft's ODBC driver installed in the image
-(`msodbcsql18` and `unixodbc`), so that means a derived image; the MySQL and SQL Server paths are not part
-of the automated tests, so try them against a test database first.
+(for example `EXTRAS=mysql,mssql`, or `DB_DRIVERS=mysql,mssql` in `.env` for the compose file). Asking for
+`mssql` also installs Microsoft's ODBC driver into the image. The admin console shows which engines the
+running server can open, so a database of an engine it can't open is never registered by mistake.
 
 Settings (all `MCP_`-prefixed environment variables):
 
@@ -151,6 +202,9 @@ Settings (all `MCP_`-prefixed environment variables):
 | `OAUTH_ROLES_CLAIM` | Dotted path to the roles in the token. Default `realm_access.roles` (Keycloak). |
 | `OAUTH_REQUIRED_SCOPES` | Comma-separated scopes every token must carry (optional). |
 | `HTTP_HOST`, `HTTP_PORT` | Where to listen. Default `127.0.0.1:8000`. |
+| `ALLOWED_HOSTS`, `ALLOWED_ORIGINS` | Extra `Host` and `Origin` values to accept, comma-separated, besides the server's own address. Origins are only needed for MCP clients that run inside a web page. |
+| `RATE_LIMIT_PER_MINUTE`, `MAX_CONCURRENT_CALLS` | Fair use per signed-in person. Defaults 120 and 4; 0 turns a limit off. |
+| `SQLITE_ROOT` | SQLite databases must be inside this folder. Without it, SQLite connections are refused. |
 
 ## Caching (Redis)
 
@@ -188,6 +242,10 @@ mcp-server/.venv/Scripts/python -m pytest -m "not integration"   # unit tests on
 
 - **Unit tests** (`tests/mcp_server/unit`) use in-memory fakes. The database adapter is faked,
   so they check things like "a rejected query never reaches the database".
+- **MySQL** has its own integration test (`test_mysql.py`) against a real MySQL 8.4 container: schema
+  reflection, the row cap, the time limit, the read-only session (even for a database user who could
+  write), the validator's MySQL rules and the console's connection check. It needs
+  `pip install -e ".[mysql]"` and is skipped without it.
 - **Integration tests** (`tests/mcp_server/integration`) start a real Postgres 16 container with the
   same init script and sample data as the dev setup, apply the real migration, and build the
   SQLite copy. Nearly every test runs against **both engines** and expects the same answer, and
@@ -200,11 +258,10 @@ Checks used in CI: `ruff check`, `ruff format --check`, and `mypy` (strict) in t
 
 Things that are deliberately or currently not covered, so nobody is surprised later:
 
-- **MySQL/MariaDB and SQL Server are not tested against live servers yet.** Their code paths
-  follow each driver's documentation and are covered by URL-building and SQL-validation tests, but
-  nothing has connected to a real one. SQL Server has no server-side query timeout or read-only
-  session, so it relies on the database role and a client-side timeout; `explain_query` isn't
-  available there.
+- **SQL Server is not tested against a live server.** MySQL is (see above), and SQL Server's ODBC
+  driver is checked to load in the image, but nothing has run queries against a real SQL Server. It
+  has no server-side query timeout or read-only session, so it relies on the database role and a
+  client-side timeout; `explain_query` isn't available there.
 - **Row cap works by reading a stream and stopping**, not by rewriting the SQL with `LIMIT`. This
   keeps `ORDER BY`, CTEs and duplicate column names working on every engine, but the database may
   still do the work of a large query until the time limit stops it.

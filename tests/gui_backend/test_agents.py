@@ -125,6 +125,20 @@ async def test_the_approval_form_is_offered_the_tools_presets_and_databases(api)
     assert {"shop-pg", "shop-sqlite"} <= {c["name"] for c in options["connections"]}
 
 
+async def test_a_request_nobody_has_seen_for_a_week_stops_popping_up_but_stays_listed(api, mcp):
+    client_id = new_client()
+    agent = await connect(api, mcp, client_id)
+    async with api.owner.begin() as db:
+        await db.execute(
+            text("UPDATE agents SET last_seen_at = now() - interval '8 days' WHERE client_id = :c"),
+            {"c": client_id},
+        )
+    pending = (await api.client.get("/api/agents/pending", headers=api.admin)).json()
+    assert agent["id"] not in [a["id"] for a in pending["agents"]]
+    listed = (await api.client.get("/api/agents", headers=api.admin)).json()
+    assert agent["id"] in [a["id"] for a in listed]
+
+
 # --- approving -------------------------------------------------------------------------------------------
 
 
