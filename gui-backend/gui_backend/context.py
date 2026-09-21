@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+import httpx
 from mcp.server.auth.provider import TokenVerifier
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -21,8 +22,10 @@ class Context:
     secret_box: SecretBox
     registry: ConnectionRegistry  # opens the *target* databases, for browsing their tables
     verifier: TokenVerifier
+    http: httpx.AsyncClient  # short-timeout client for health probes
 
     async def close(self) -> None:
+        await self.http.aclose()
         await self.registry.close()
         await self.cache.close()
         await self.engine.dispose()
@@ -57,4 +60,5 @@ def build_context(
             audience=settings.oauth_audience,
             jwks_url=settings.oauth_jwks_url,
         ),
+        http=httpx.AsyncClient(timeout=2.0),
     )

@@ -12,6 +12,7 @@ from fake_idp import FakeIdP
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from gui_backend.config import Settings
+from gui_backend.context import Context
 from gui_backend.main import create_app
 from mcp_sql_server.auth.token_verifier import JwtTokenVerifier
 
@@ -25,6 +26,7 @@ class Api:
     idp: FakeIdP
     cache: MemoryCache
     owner: AsyncEngine  # meta_owner: can seed rows the GUI's own role isn't allowed to write
+    ctx: Context  # the app's shared resources, for tests that need to swap one
 
     def headers(
         self, *roles: str, sub: str = "admin-1", name: str = "Ada Admin", **kw: Any
@@ -62,6 +64,6 @@ async def api(postgres, fernet_key, registered) -> AsyncIterator[Api]:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://gui.test"
     ) as client:
-        yield Api(client, idp, cache, owner)
+        yield Api(client, idp, cache, owner, app.state.ctx)
     await app.state.ctx.close()
     await owner.dispose()

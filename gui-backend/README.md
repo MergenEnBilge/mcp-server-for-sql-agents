@@ -23,6 +23,7 @@ Settings come from `GUI_`-prefixed environment variables (see `.env.example`):
 | `GUI_OAUTH_ISSUER`, `GUI_OAUTH_AUDIENCE` | identity provider, and the audience tokens must carry to be accepted here |
 | `GUI_ADMIN_ROLE` | role (or scope) that grants admin access. Default `admin` |
 | `GUI_REDIS_URL` | optional; lets a change made here invalidate the MCP server's caches instantly |
+| `GUI_MCP_HEALTH_URL` | optional; the MCP server's `/healthz`, so the health screen can say whether it is up |
 | `GUI_CORS_ORIGINS` | only needed in development, when the UI runs on its own port |
 
 ## How sign-in works
@@ -45,6 +46,8 @@ A signed-in person who isn't an administrator can only ask `/api/me`.
 | Connections | `GET/POST /api/connections`, `GET/PUT/DELETE /api/connections/{id}`, `POST /api/connections/{id}/test`, `POST /api/connections/test`, `GET/PUT /api/connections/{id}/access`, `GET /api/engines` |
 | Permissions | `GET/POST /api/permissions/subjects`, `GET/PUT /api/permissions/tables`, `GET/PUT /api/permissions/tools` |
 | Schema descriptions | `GET /api/schema/tables`, `GET /api/schema/table`, `PUT/DELETE /api/schema/description` |
+| Health | `GET /api/health?hours=24`: database, pool, Redis and MCP server status; error rate and p95 `run_query` latency from the audit log, plus a time series |
+| Saved reports | `GET/POST /api/reports`, `GET/PUT/DELETE /api/reports/{id}` (a stub for the future BI app; the SQL must be read-only) |
 | Ops | `GET /healthz` (process is up), `GET /readyz` (database reachable) |
 
 ## Guarantees worth knowing about

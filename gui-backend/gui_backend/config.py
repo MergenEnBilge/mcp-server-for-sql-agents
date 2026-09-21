@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Holders of this role (or a scope of the same name) may use the admin endpoints.
     admin_role: str = "admin"
 
+    # Where the MCP server answers "is the process up?" (its /healthz). Optional: when unset,
+    # the health screen says the check isn't configured instead of guessing.
+    mcp_health_url: str | None = None
+
     # Browser origins allowed to call the API cross-site. Only needed in development, where the
     # UI runs on its own port; in production the UI and API share one origin.
     cors_origins: str = ""
