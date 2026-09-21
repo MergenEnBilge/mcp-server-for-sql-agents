@@ -30,7 +30,7 @@ test.describe("audit log", () => {
   test("filters live in the address bar and can be cleared", async ({ page }) => {
     await signIn(page, "alice", "/audit?tool=run_query");
     await expect(page.getByLabel("Tool")).toHaveValue("run_query");
-    for (const cell of await page.locator("tbody tr.row td:nth-child(3)").all()) await expect(cell).toHaveText("run_query");
+    for (const cell of await page.locator("tbody tr.row td:nth-child(4)").all()) await expect(cell).toHaveText("run_query");
     await page.getByRole("button", { name: "Clear filters" }).click();
     await expect(page).not.toHaveURL(/tool=/);
   });
