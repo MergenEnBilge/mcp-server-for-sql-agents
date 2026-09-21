@@ -97,6 +97,20 @@ class RedisCache(Cache):
                 "could not invalidate cache family %r; stale entries may be served: %s", family, exc
             )
 
+    async def count(self, key: str, ttl_s: int) -> int | None:
+        if not self._available():
+            return None
+        full_key = f"{PREFIX}:count:{key}"
+        try:
+            async with self._redis.pipeline(transaction=True) as pipe:
+                pipe.incr(full_key)
+                pipe.expire(full_key, ttl_s, nx=True)  # only the first hit starts the clock
+                value, _ = await pipe.execute()
+        except _FAILURES as exc:
+            self._failed("count", exc)
+            return None
+        return int(value)
+
     async def ping(self) -> bool:
         try:
             return bool(await self._redis.ping())

@@ -10,6 +10,7 @@ class MemoryCache(Cache):
         self.now = 0.0  # tests move the clock by assigning to this
         self.gets = 0
         self.sets = 0
+        self.counters: dict[str, tuple[int, float]] = {}
 
     async def get(self, key: str) -> str | None:
         self.gets += 1
@@ -27,6 +28,13 @@ class MemoryCache(Cache):
 
     async def bump(self, family: str) -> None:
         self.versions[family] = self.versions.get(family, 0) + 1
+
+    async def count(self, key: str, ttl_s: int) -> int | None:
+        value, expires = self.counters.get(key, (0, self.now + ttl_s))
+        if expires <= self.now:
+            value, expires = 0, self.now + ttl_s
+        self.counters[key] = (value + 1, expires)
+        return value + 1
 
     async def ping(self) -> bool:
         return True
@@ -48,6 +56,9 @@ class BrokenCache(Cache):
         return None
 
     async def bump(self, family: str) -> None:
+        return None
+
+    async def count(self, key: str, ttl_s: int) -> int | None:
         return None
 
     async def ping(self) -> bool:

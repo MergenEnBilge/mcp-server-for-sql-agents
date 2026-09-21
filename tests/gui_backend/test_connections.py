@@ -174,6 +174,24 @@ async def test_a_sqlite_connection_needs_only_a_path(api, sqlite_file):
     assert created["has_secret"] is False
 
 
+@pytest.mark.parametrize(
+    "path", ["/etc/passwd", "../../elsewhere.sqlite", "file:/x.sqlite?mode=rwc", "C:/Windows/x.db"]
+)
+async def test_a_sqlite_file_outside_the_allowed_folder_is_refused(api, path):
+    body = {"name": f"lite-{uuid4().hex[:6]}", "engine": "sqlite", "details": {"path": path}}
+    for url in ("/api/connections", "/api/connections/test"):
+        response = await api.client.post(url, json=body, headers=api.admin)
+        assert response.status_code == 422, url
+        assert "SQLite" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("host", ["169.254.169.254", "metadata.google.internal", "0.0.0.0"])
+async def test_a_cloud_metadata_address_is_refused_as_a_database_host(api, postgres, host):
+    body = new_connection(postgres, details=pg_details(postgres, host=host))
+    response = await api.client.post("/api/connections", json=body, headers=api.admin)
+    assert response.status_code == 422
+
+
 # --- editing --------------------------------------------------------------------------------------------
 
 

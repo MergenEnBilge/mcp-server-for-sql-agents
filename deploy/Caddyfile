@@ -13,8 +13,28 @@
 		-Server
 	}
 
+	# The identity provider's admin console and its "master" realm are the keys to every sign-in,
+	# so they are not served to the internet. To manage users, set KEYCLOAK_EXPOSE_ADMIN=true in
+	# .env (and turn it off again afterwards), or reach Keycloak from inside the private network.
+	@keycloak_admin {
+		path /auth/admin /auth/admin/* /auth/realms/master /auth/realms/master/*
+		expression `'{$KEYCLOAK_EXPOSE_ADMIN:false}' != 'true'`
+	}
+	handle @keycloak_admin {
+		respond "Not found" 404
+	}
+
 	# Identity provider (Keycloak lives under /auth).
 	handle /auth/* {
+		reverse_proxy keycloak:8080
+	}
+
+	# OAuth clients find an authorization server whose address has a path (ours does, /auth/...)
+	# at /.well-known/oauth-authorization-server/<path> (RFC 8414). Keycloak publishes the same
+	# document under its own path, so pass these requests on to it.
+	@as_metadata path_regexp as_metadata ^/\.well-known/(oauth-authorization-server|openid-configuration)/auth/realms/([^/]+)/?$
+	handle @as_metadata {
+		rewrite * /auth/realms/{re.as_metadata.2}/.well-known/{re.as_metadata.1}
 		reverse_proxy keycloak:8080
 	}
 

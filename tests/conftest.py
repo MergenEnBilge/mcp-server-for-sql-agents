@@ -107,7 +107,7 @@ def postgres() -> Iterator[PostgresInfra]:
 
 
 @pytest.fixture(scope="session")
-def sqlite_file(tmp_path_factory) -> Path:
+def sqlite_file(tmp_path_factory) -> Iterator[Path]:
     spec = importlib.util.spec_from_file_location(
         "build_sqlite", REPO / "db" / "sample_data" / "build_sqlite.py"
     )
@@ -116,7 +116,11 @@ def sqlite_file(tmp_path_factory) -> Path:
     spec.loader.exec_module(module)
     path = tmp_path_factory.mktemp("sqlite") / "sample.sqlite"
     module.build(path)
-    return path
+    # SQLite connections are only allowed inside one configured folder; this is that folder.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("MCP_SQLITE_ROOT", str(path.parent))
+        patch.setenv("GUI_SQLITE_ROOT", str(path.parent))
+        yield path
 
 
 @pytest.fixture(scope="session")

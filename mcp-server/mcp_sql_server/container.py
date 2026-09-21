@@ -1,12 +1,13 @@
 """Builds the service layer from settings. The one place everything is wired together."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.cache.cached_meta_store import CachedMetaStore
 from mcp_sql_server.cache.redis_cache import create_cache
 from mcp_sql_server.config import Settings
 from mcp_sql_server.crypto import SecretBox
+from mcp_sql_server.ratelimit import RateLimiter
 from mcp_sql_server.services.audit_service import AuditService
 from mcp_sql_server.services.connection_registry import ConnectionRegistry
 from mcp_sql_server.services.meta_store import MetaStore, PostgresMetaStore
@@ -27,6 +28,7 @@ class Services:
     permissions: PermissionService
     schema: SchemaService
     query: QueryService
+    limiter: RateLimiter = field(default_factory=RateLimiter)
 
     async def close(self) -> None:
         await self.registry.close()
@@ -48,11 +50,17 @@ def build_services(
         SecretBox(settings.connection_secret_keys.get_secret_value()),
         cache=cache,
         schema_ttl_s=settings.cache_ttl_s,
+        sqlite_root=settings.sqlite_root,
     )
     permissions = PermissionService(store)
     audit = AuditService(store)
     sanitizer = OutputSanitizer(max_cell_chars=limits.max_cell_chars)
     return Services(
+        limiter=RateLimiter(
+            cache,
+            per_minute=settings.rate_limit_per_minute,
+            max_concurrent=settings.max_concurrent_calls,
+        ),
         store=store,
         cache=cache,
         registry=registry,

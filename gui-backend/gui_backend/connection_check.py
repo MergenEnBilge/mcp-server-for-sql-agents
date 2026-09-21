@@ -34,6 +34,7 @@ async def check_connection(
     password: str | None,
     *,
     timeout_s: float,
+    sqlite_root: str | None = None,
 ) -> CheckResult:
     """Open the database with the given settings, list its tables, and say how it went."""
     started = time.monotonic()
@@ -47,7 +48,9 @@ async def check_connection(
         updated_at=None,  # type: ignore[arg-type]
     )
     adapter = SQLAlchemyAdapter(
-        build_engine_url(record, password), schemas=details.get("schemas") or None, pool_size=1
+        build_engine_url(record, password, sqlite_root),
+        schemas=details.get("schemas") or None,
+        pool_size=1,
     )
     try:
         async with asyncio.timeout(timeout_s):

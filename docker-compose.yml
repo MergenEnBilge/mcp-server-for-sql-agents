@@ -18,6 +18,14 @@ name: mcp-sql
 x-service: &service
   restart: unless-stopped
 
+# What the application containers may not do: gain privileges, keep any Linux capability, or
+# write to their own filesystem (they have a small temp folder and nothing else).
+x-locked-down: &locked-down
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+
 services:
   postgres:
     <<: *service
@@ -102,7 +110,7 @@ services:
     restart: "no"
 
   mcp-server:
-    <<: *service
+    <<: [*service, *locked-down]
     build: { context: ., dockerfile: mcp-server/Dockerfile }
     environment:
       MCP_APP_META_URL: postgresql+asyncpg://mcp_app:${MCP_APP_PASSWORD}@postgres:5432/app_meta
@@ -112,6 +120,10 @@ services:
       MCP_OAUTH_ISSUER: https://${PUBLIC_HOST:-localhost}/auth/realms/sql-data-layer
       # The signing keys are fetched over the internal network, not through the public address.
       MCP_OAUTH_JWKS_URL: http://keycloak:8080/auth/realms/sql-data-layer/protocol/openid-connect/certs
+      # SQLite databases must live in this folder; nothing else on the disk can be registered.
+      MCP_SQLITE_ROOT: /data
+      # Browser-based MCP clients (for example the MCP Inspector) must be listed to be let in.
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
     volumes:
       - sampledata:/data:ro
     depends_on:
@@ -119,7 +131,7 @@ services:
       redis: { condition: service_healthy }
 
   gui-backend:
-    <<: *service
+    <<: [*service, *locked-down]
     build: { context: ., dockerfile: gui-backend/Dockerfile }
     environment:
       GUI_APP_META_URL: postgresql+asyncpg://gui_app:${GUI_APP_PASSWORD}@postgres:5432/app_meta
@@ -129,6 +141,7 @@ services:
       GUI_OAUTH_AUDIENCE: https://${PUBLIC_HOST:-localhost}/api
       GUI_OAUTH_JWKS_URL: http://keycloak:8080/auth/realms/sql-data-layer/protocol/openid-connect/certs
       GUI_MCP_HEALTH_URL: http://mcp-server:8000/healthz
+      GUI_SQLITE_ROOT: /data
     volumes:
       - sampledata:/data:ro
     depends_on:

@@ -34,6 +34,7 @@ from mcp_sql_server.cache.cached_adapter import CachedAdapter
 from mcp_sql_server.crypto import SecretBox
 from mcp_sql_server.errors import ConnectionUnavailable
 from mcp_sql_server.models import ConnectionRecord
+from mcp_sql_server.services.connection_guard import check_host, resolve_sqlite_path
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +54,20 @@ class AdapterProvider(Protocol):
     async def adapter_for(self, record: ConnectionRecord) -> DBAdapter: ...
 
 
-def build_engine_url(record: ConnectionRecord, password: str | None) -> URL:
+def build_engine_url(
+    record: ConnectionRecord, password: str | None, sqlite_root: str | None = None
+) -> URL:
+    """The SQLAlchemy URL for a record. Raises ValueError for one that must not be opened
+    (see connection_guard.py): `sqlite_root` is the only folder SQLite files may live in."""
     driver = DRIVERS.get(record.engine)
     if driver is None:
         raise ValueError(f"unsupported engine {record.engine!r}; supported: {sorted(DRIVERS)}")
     details = record.details
     if record.engine == "sqlite":
-        return URL.create(f"sqlite+{driver}", database=details["path"])
+        path = resolve_sqlite_path(str(details["path"]), sqlite_root)
+        return URL.create(f"sqlite+{driver}", database=str(path))
+    if details.get("host"):
+        check_host(str(details["host"]))
     return URL.create(
         f"{record.engine}+{driver}",
         username=details.get("username"),
@@ -81,8 +89,10 @@ class ConnectionRegistry:
         adapter_factory: AdapterFactory = SQLAlchemyAdapter,
         cache: Cache | None = None,
         schema_ttl_s: int = 300,
+        sqlite_root: str | None = None,
     ) -> None:
         self._secret_box = secret_box
+        self._sqlite_root = sqlite_root
         self._adapter_factory = adapter_factory
         self._cache = cache
         self._schema_ttl_s = schema_ttl_s
@@ -111,7 +121,8 @@ class ConnectionRegistry:
                 else None
             )
             adapter = self._adapter_factory(
-                build_engine_url(record, password), schemas=_schemas(record.details)
+                build_engine_url(record, password, self._sqlite_root),
+                schemas=_schemas(record.details),
             )
             await adapter.connect()
             if self._cache is not None:

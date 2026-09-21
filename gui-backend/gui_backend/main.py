@@ -20,6 +20,7 @@ from gui_backend.config import Settings, get_settings
 from gui_backend.context import Context, build_context
 from gui_backend.routers import audit, connections, health, me, permissions, reports, schema
 from mcp_sql_server.cache.base import Cache
+from mcp_sql_server.http_security import SecurityHeaders
 
 logger = logging.getLogger("gui_backend")
 
@@ -43,6 +44,8 @@ def create_app(
 
     app = FastAPI(title="SQL data layer: admin API", lifespan=lifespan)
     app.state.ctx = ctx
+
+    app.add_middleware(SecurityHeaders)  # admin answers are never cacheable
 
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     if origins:

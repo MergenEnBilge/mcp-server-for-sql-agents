@@ -77,6 +77,23 @@ class Settings(BaseSettings):
     oauth_roles_claim: str = "realm_access.roles"  # dotted path into the token's claims
     oauth_required_scopes: str = ""  # comma-separated
 
+    # Browsers can be tricked into talking to a server on the caller's own network (DNS
+    # rebinding), so the transport checks the Host and Origin headers of every request. The
+    # server's own address (public_url) is always allowed; these add to it, comma-separated.
+    # Origins are only needed for MCP clients that run inside a web page.
+    allowed_hosts: str = ""
+    allowed_origins: str = ""
+
+    # Fair use, per signed-in caller: this many tool calls a minute, and this many running at
+    # the same moment. 0 turns a limit off.
+    rate_limit_per_minute: int = Field(default=120, ge=0)
+    max_concurrent_calls: int = Field(default=4, ge=0)
+
+    # SQLite connections may only point at files inside this folder. Without it, SQLite
+    # connections are refused: a database path typed into the admin console must never be
+    # able to reach an arbitrary file on the server.
+    sqlite_root: str | None = None
+
     # "jwt" checks signed tokens locally. "introspection" asks the identity provider
     # (RFC 7662) and caches the answer in Redis, for providers that issue opaque tokens.
     token_verification: Literal["jwt", "introspection"] = "jwt"

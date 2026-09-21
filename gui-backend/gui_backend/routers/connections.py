@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from gui_backend.auth import Admin, ContextDep
 from gui_backend.changes import announce, log_change
 from gui_backend.connection_check import SECRET_LOOKING, check_connection
+from mcp_sql_server.services.connection_guard import check_host, resolve_sqlite_path
 from mcp_sql_server.services.connection_registry import DRIVERS
 
 router = APIRouter(prefix="/api", tags=["connections"])
@@ -122,7 +123,9 @@ _SELECT = """
 """
 
 
-def validate_details(engine: str, details: dict[str, Any]) -> dict[str, Any]:
+def validate_details(
+    engine: str, details: dict[str, Any], sqlite_root: str | None = None
+) -> dict[str, Any]:
     """Refuse anything that isn't a known non-secret setting for this engine, in plain words."""
     unknown = sorted(set(details) - ALLOWED_DETAIL_KEYS)
     if unknown:
@@ -156,6 +159,13 @@ def validate_details(engine: str, details: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(422, f"Missing required setting: {', '.join(missing)}.")
     if engine != "sqlite" and re.search(r"[\s/@]", str(details["host"])):
         raise HTTPException(422, "The host should be a plain host name or address.")
+    try:
+        if engine == "sqlite":
+            resolve_sqlite_path(str(details["path"]), sqlite_root)
+        else:
+            check_host(str(details["host"]))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
     return {k: v for k, v in details.items() if v not in (None, "")}
 
 
@@ -193,7 +203,7 @@ async def get_connection(connection_id: UUID, ctx: ContextDep, _admin: Admin) ->
 
 @router.post("/connections", status_code=201)
 async def create_connection(body: ConnectionIn, ctx: ContextDep, admin: Admin) -> ConnectionOut:
-    details = validate_details(body.engine, body.details)
+    details = validate_details(body.engine, body.details, ctx.settings.sqlite_root)
     encrypted = ctx.secret_box.encrypt(body.secret) if body.secret else None
     try:
         async with ctx.engine.begin() as db:
@@ -235,7 +245,7 @@ async def update_connection(
     connection_id: UUID, body: ConnectionUpdate, ctx: ContextDep, admin: Admin
 ) -> ConnectionOut:
     current = await _fetch(ctx, connection_id)
-    details = validate_details(current.engine, body.details)
+    details = validate_details(current.engine, body.details, ctx.settings.sqlite_root)
 
     changed = [
         name
@@ -316,7 +326,7 @@ async def delete_connection(connection_id: UUID, ctx: ContextDep, admin: Admin) 
 @router.post("/connections/test")
 async def test_settings(body: ConnectionTest, ctx: ContextDep, _admin: Admin) -> TestOut:
     """Try settings that aren't saved yet (or edited ones) without changing anything."""
-    details = validate_details(body.engine, body.details)
+    details = validate_details(body.engine, body.details, ctx.settings.sqlite_root)
     password = body.secret
     if password is None and body.connection_id is not None:
         async with ctx.engine.connect() as db:
@@ -328,7 +338,11 @@ async def test_settings(body: ConnectionTest, ctx: ContextDep, _admin: Admin) ->
             ).scalar_one_or_none()
         password = ctx.secret_box.decrypt(stored) if stored else None
     result = await check_connection(
-        body.engine, details, password, timeout_s=ctx.settings.connection_test_timeout_s
+        body.engine,
+        details,
+        password,
+        timeout_s=ctx.settings.connection_test_timeout_s,
+        sqlite_root=ctx.settings.sqlite_root,
     )
     return TestOut(**result.__dict__)
 
@@ -346,7 +360,11 @@ async def test_saved_connection(connection_id: UUID, ctx: ContextDep, admin: Adm
         ).scalar_one_or_none()
     password = ctx.secret_box.decrypt(stored) if stored else None
     result = await check_connection(
-        current.engine, current.details, password, timeout_s=ctx.settings.connection_test_timeout_s
+        current.engine,
+        current.details,
+        password,
+        timeout_s=ctx.settings.connection_test_timeout_s,
+        sqlite_root=ctx.settings.sqlite_root,
     )
     async with ctx.engine.begin() as db:
         await db.execute(

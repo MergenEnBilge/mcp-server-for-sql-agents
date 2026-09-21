@@ -52,7 +52,10 @@ def build_context(
         cache=cache,
         secret_box=secret_box,
         registry=ConnectionRegistry(
-            secret_box, cache=cache, schema_ttl_s=settings.schema_cache_ttl_s
+            secret_box,
+            cache=cache,
+            schema_ttl_s=settings.schema_cache_ttl_s,
+            sqlite_root=settings.sqlite_root,
         ),
         verifier=verifier
         or JwtTokenVerifier(

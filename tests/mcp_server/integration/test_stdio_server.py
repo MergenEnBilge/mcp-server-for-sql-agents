@@ -21,8 +21,9 @@ def conn(request) -> str:
     return request.param
 
 
-def server_env(postgres, fernet_key: str, sub: str) -> dict[str, str]:
+def server_env(postgres, fernet_key: str, sub: str, sqlite_file) -> dict[str, str]:
     return {
+        "MCP_SQLITE_ROOT": str(sqlite_file.parent),
         "MCP_APP_META_URL": postgres.url("mcp_app", "app_meta"),
         "MCP_CONNECTION_SECRET_KEYS": fernet_key,
         "MCP_STDIO_SUB": sub,
@@ -33,12 +34,12 @@ def server_env(postgres, fernet_key: str, sub: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def stdio_params(postgres, fernet_key, tmp_path):
+def stdio_params(postgres, fernet_key, tmp_path, sqlite_file):
     sub = f"stdio-{uuid.uuid4().hex[:8]}"
     return StdioServerParameters(
         command=sys.executable,
         args=["-m", "mcp_sql_server"],
-        env=server_env(postgres, fernet_key, sub),
+        env=server_env(postgres, fernet_key, sub, sqlite_file),
         cwd=str(tmp_path),  # no stray .env file to pick up
     )
 
@@ -112,8 +113,8 @@ async def test_the_stdio_identity_is_what_shows_up_in_the_audit_log(stdio_params
     assert [tuple(r) for r in rows] == [("Stdio Tester", "list_tables", True)]
 
 
-def test_stdio_refuses_to_start_without_an_identity(postgres, fernet_key, tmp_path):
-    env = server_env(postgres, fernet_key, sub="")
+def test_stdio_refuses_to_start_without_an_identity(postgres, fernet_key, tmp_path, sqlite_file):
+    env = server_env(postgres, fernet_key, "", sqlite_file)
     env.pop("MCP_STDIO_SUB")
     done = subprocess.run(
         [sys.executable, "-m", "mcp_sql_server"],

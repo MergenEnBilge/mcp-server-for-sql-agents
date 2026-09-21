@@ -56,11 +56,15 @@ def test_each_supported_engine_picks_its_async_driver():
     assert build_engine_url(record("postgresql", details), "p").drivername == "postgresql+asyncpg"
 
 
-def test_sqlite_uses_a_file_path_and_no_credentials():
-    url = build_engine_url(record("sqlite", {"path": "/data/shop.sqlite"}, password=None), None)
+def test_sqlite_uses_a_file_path_and_no_credentials(tmp_path):
+    url = build_engine_url(
+        record("sqlite", {"path": str(tmp_path / "shop.sqlite")}, password=None),
+        None,
+        str(tmp_path),
+    )
     assert (url.drivername, url.database, url.username) == (
         "sqlite+aiosqlite",
-        "/data/shop.sqlite",
+        str((tmp_path / "shop.sqlite").resolve()),
         None,
     )
 

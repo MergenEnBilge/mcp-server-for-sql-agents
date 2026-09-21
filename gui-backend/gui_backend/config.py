@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # UI runs on its own port; in production the UI and API share one origin.
     cors_origins: str = ""
 
+    # SQLite connections may only use files inside this folder (see the MCP server's setting of
+    # the same name). Without it, SQLite connections are refused.
+    sqlite_root: str | None = None
+
     max_page_size: int = Field(default=200, ge=1)
     schema_cache_ttl_s: int = Field(default=300, ge=1)
     connection_test_timeout_s: float = Field(default=8.0, gt=0, le=60)

@@ -146,6 +146,65 @@ def test_bad_tokens_are_turned_away_with_a_401(running, idp, make_token):
     assert "invalid_token" in response.headers["www-authenticate"]
 
 
+# --- who may talk to the endpoint at all ---------------------------------------------------------
+
+
+@REGISTERED
+def test_a_request_addressed_to_some_other_host_is_refused(running, idp):
+    # DNS rebinding: a page on evil.example resolves to this server and speaks to it.
+    response = httpx.post(
+        running.mcp_url,
+        json=initialize_request(),
+        headers={**MCP_HEADERS, "Authorization": f"Bearer {idp.token()}", "Host": "evil.example"},
+    )
+    assert response.status_code == 421
+
+
+@REGISTERED
+def test_a_request_from_a_web_page_on_another_origin_is_refused(running, idp):
+    response = httpx.post(
+        running.mcp_url,
+        json=initialize_request(),
+        headers={
+            **MCP_HEADERS,
+            "Authorization": f"Bearer {idp.token()}",
+            "Origin": "https://evil.example",
+        },
+    )
+    assert response.status_code == 403
+
+
+@REGISTERED
+def test_a_request_from_the_servers_own_origin_is_accepted(running, idp):
+    response = httpx.post(
+        running.mcp_url,
+        json=initialize_request(),
+        headers={**MCP_HEADERS, "Authorization": f"Bearer {idp.token()}", "Origin": running.url},
+    )
+    assert response.status_code == 200
+
+
+@REGISTERED
+def test_responses_carry_the_no_store_and_nosniff_headers(running, idp):
+    response = httpx.post(
+        running.mcp_url,
+        json=initialize_request(),
+        headers={**MCP_HEADERS, "Authorization": f"Bearer {idp.token()}"},
+    )
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+@REGISTERED
+def test_an_oversized_request_is_refused_before_it_is_read(running, idp):
+    response = httpx.post(
+        running.mcp_url,
+        content=b'{"jsonrpc": "2.0", "id": 1, "method": "' + b"x" * (300 * 1024) + b'"}',
+        headers={**MCP_HEADERS, "Authorization": f"Bearer {idp.token()}"},
+    )
+    assert response.status_code == 413
+
+
 # --- what an authenticated client can do -------------------------------------------------------
 
 
@@ -239,3 +298,16 @@ async def test_required_scopes_are_enforced(postgres, fernet_key, idp):
 
         async with mcp_client(server, idp.token(scope="openid mcp:query")) as client:
             assert (await client.list_tools()).tools
+
+
+@REGISTERED
+async def test_a_caller_who_makes_too_many_calls_is_told_to_wait(postgres, fernet_key, idp):
+    with serve(postgres, fernet_key, idp, rate_limit_per_minute=3) as server:
+        async with mcp_client(server, idp.token(sub="busy-user")) as busy:
+            outcomes = [await busy.call_tool("list_connections", {}) for _ in range(5)]
+            assert [r.is_error for r in outcomes] == [False, False, False, True, True]
+            assert "Too many requests" in outcomes[-1].content[0].text
+
+        # Somebody else is not affected by it.
+        async with mcp_client(server, idp.token(sub="other-user")) as other:
+            assert not (await other.call_tool("list_connections", {})).is_error

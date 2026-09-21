@@ -37,6 +37,12 @@ class Cache(ABC):
         """Invalidate every entry of a family, immediately."""
 
     @abstractmethod
+    async def count(self, key: str, ttl_s: int) -> int | None:
+        """Add one to a counter that disappears `ttl_s` seconds after it was first created, and
+        return the new value. None means the cache can't say (the caller counts for itself).
+        Shared between replicas, which is what makes a rate limit hold across all of them."""
+
+    @abstractmethod
     async def ping(self) -> bool: ...
 
     @abstractmethod
@@ -56,6 +62,9 @@ class NullCache(Cache):
         return None
 
     async def bump(self, family: str) -> None:
+        return None
+
+    async def count(self, key: str, ttl_s: int) -> int | None:
         return None
 
     async def ping(self) -> bool:

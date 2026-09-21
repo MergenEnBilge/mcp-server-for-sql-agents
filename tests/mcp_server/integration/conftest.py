@@ -34,11 +34,13 @@ class Stack:
 
 
 @pytest.fixture
-async def stack(postgres, registered: None, secret_box: SecretBox) -> AsyncIterator[Stack]:
+async def stack(
+    postgres, registered: None, secret_box: SecretBox, sqlite_file
+) -> AsyncIterator[Stack]:
     limits = QueryLimits(timeout_s=1.5)
     store = PostgresMetaStore.from_url(postgres.url("mcp_app", "app_meta"))
     admin = create_async_engine(postgres.url("gui_app", "app_meta"))
-    registry = ConnectionRegistry(secret_box)
+    registry = ConnectionRegistry(secret_box, sqlite_root=str(sqlite_file.parent))
     permissions = PermissionService(store)
     audit = AuditService(store)
     sanitizer = OutputSanitizer(max_cell_chars=limits.max_cell_chars)

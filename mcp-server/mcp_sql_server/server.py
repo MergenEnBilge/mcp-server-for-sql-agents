@@ -17,14 +17,20 @@ from typing import Any
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver import MCPServer
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp
 
 from mcp_sql_server.auth.caller import CallerProvider, stdio_caller, token_caller
 from mcp_sql_server.cache.base import Cache
 from mcp_sql_server.config import Settings, get_settings, split_list
 from mcp_sql_server.container import Services, build_services
+from mcp_sql_server.http_security import (
+    MAX_REQUEST_BODY_BYTES,
+    SecurityHeaders,
+    transport_security,
+    with_browser_access,
+)
 from mcp_sql_server.tools.mcp_tools import INSTRUCTIONS, register_tools
 
 logger = logging.getLogger("mcp_sql_server")
@@ -98,7 +104,7 @@ def build_http_auth(
 
 def create_http_app(
     settings: Settings, services: Services, verifier: TokenVerifier | None = None
-) -> Starlette:
+) -> ASGIApp:
     """The Streamable HTTP application: OAuth-protected MCP endpoint plus public metadata."""
     auth, verifier = build_http_auth(settings, verifier, services.cache)
     server = create_server(
@@ -106,9 +112,14 @@ def create_http_app(
     )
     # Stateless: no session lives in this process, so any number of replicas can sit behind a
     # load balancer with no sticky sessions.
-    return server.streamable_http_app(
-        stateless_http=True, json_response=True, host=settings.http_host
+    app = server.streamable_http_app(
+        stateless_http=True,
+        json_response=True,
+        host=settings.http_host,
+        transport_security=transport_security(settings),
+        max_request_body_size=MAX_REQUEST_BODY_BYTES,
     )
+    return SecurityHeaders(with_browser_access(app, settings))
 
 
 def main(argv: list[str] | None = None) -> None:

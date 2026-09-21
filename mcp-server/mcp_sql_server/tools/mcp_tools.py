@@ -91,10 +91,21 @@ def register_tools(
     server: MCPServer[Any], services: Services, current_caller: CallerProvider
 ) -> None:
     """Add the eight tools to `server`. `current_caller` says who is making the request."""
-    schema, query = services.schema, services.query
+    schema, query, limiter = services.schema, services.query, services.limiter
+
+    def limited[**P, R](fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        """Count the call against the caller's fair-use limits (see ratelimit.py)."""
+
+        @functools.wraps(fn)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            async with limiter.slot(current_caller().sub):
+                return await fn(*args, **kwargs)
+
+        return wrapper
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def list_connections() -> list[ConnectionInfo]:
         """List the databases you can query, with their engine type (PostgreSQL, MySQL, SQL
         Server, SQLite, ...). Start here: every other tool needs a connection name."""
@@ -102,6 +113,7 @@ def register_tools(
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def list_tables(connection_name: ConnectionName) -> list[TableSummary]:
         """List the tables and views you may query on a connection, each with a short
         description where one has been written."""
@@ -109,12 +121,14 @@ def register_tools(
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def describe_table(connection_name: ConnectionName, table_name: TableName) -> TableDetail:
         """Columns (name, type, nullable, primary key, description) and foreign keys of a table."""
         return await schema.describe_table(current_caller(), connection_name, table_name)
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def search_schema(
         connection_name: ConnectionName,
         keyword: Annotated[
@@ -127,6 +141,7 @@ def register_tools(
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def get_relationships(
         connection_name: ConnectionName, table_name: TableName
     ) -> TableRelationships:
@@ -136,6 +151,7 @@ def register_tools(
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def run_query(
         connection_name: ConnectionName,
         sql: Annotated[
@@ -160,6 +176,7 @@ def register_tools(
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def explain_query(
         connection_name: ConnectionName,
         sql: Annotated[str, Field(description="The SELECT statement to plan. It is not executed.")],
@@ -170,6 +187,7 @@ def register_tools(
 
     @server.tool(annotations=READ_ONLY)
     @guarded
+    @limited
     async def get_sample_rows(
         connection_name: ConnectionName,
         table_name: TableName,
