@@ -1,0 +1,207 @@
+# The whole stack behind one HTTPS address.
+#
+#   docker compose --env-file .env up -d --build                    # the services
+#   docker compose --env-file .env --profile demo up -d --build     # ...plus sample users and databases
+#
+# Then open https://localhost (your browser will warn about Caddy's local certificate).
+#
+#   https://localhost/          admin console
+#   https://localhost/api       admin API
+#   https://localhost/mcp       MCP server (Streamable HTTP, OAuth 2.1)
+#   https://localhost/auth      identity provider (Keycloak)
+#
+# Only Caddy publishes ports. Everything else talks over the internal network. Secrets come from
+# .env (git-ignored); see .env.example. Passwords used inside URLs must be URL-safe (letters and
+# digits are the easy choice).
+name: mcp-sql
+
+x-service: &service
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *service
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Consumed by db/init/01-create-roles-and-databases.sh
+      META_OWNER_PASSWORD: ${META_OWNER_PASSWORD:?set META_OWNER_PASSWORD in .env}
+      MCP_APP_PASSWORD: ${MCP_APP_PASSWORD:?set MCP_APP_PASSWORD in .env}
+      GUI_APP_PASSWORD: ${GUI_APP_PASSWORD:?set GUI_APP_PASSWORD in .env}
+      ORG_OWNER_PASSWORD: ${ORG_OWNER_PASSWORD:?set ORG_OWNER_PASSWORD in .env}
+      ORG_READONLY_PASSWORD: ${ORG_READONLY_PASSWORD:?set ORG_READONLY_PASSWORD in .env}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      # The sample "org_data" database is created on first start. In a real deployment, point
+      # the MCP server at your own databases through the Connections screen and drop this mount.
+      - ./db/sample_data:/sample_data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    <<: *service
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Creates or updates the app_meta tables, then exits. The services wait for it.
+  migrate:
+    build: { context: ., dockerfile: deploy/setup.Dockerfile }
+    working_dir: /app/db
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      APP_META_MIGRATIONS_URL: postgresql+asyncpg://meta_owner:${META_OWNER_PASSWORD}@postgres:5432/app_meta
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  keycloak:
+    <<: *service
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      # Reached through Caddy under /auth; TLS ends there.
+      KC_HOSTNAME: https://${PUBLIC_HOST:-localhost}/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+    volumes:
+      - ./deploy/keycloak/sql-data-layer-realm.json:/opt/keycloak/data/import/sql-data-layer-realm.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # Adds what the realm file can't hold: the audience scope that marks tokens as meant for the
+  # MCP server. Safe to run again; it waits for Keycloak to finish starting.
+  keycloak-setup:
+    build: { context: ., dockerfile: deploy/setup.Dockerfile }
+    command: ["python", "deploy/keycloak/bootstrap_dev.py", "--structure-only"]
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      MCP_AUDIENCE: https://${PUBLIC_HOST:-localhost}/mcp
+    depends_on:
+      - keycloak
+    restart: "no"
+
+  mcp-server:
+    <<: *service
+    build: { context: ., dockerfile: mcp-server/Dockerfile }
+    environment:
+      MCP_APP_META_URL: postgresql+asyncpg://mcp_app:${MCP_APP_PASSWORD}@postgres:5432/app_meta
+      MCP_CONNECTION_SECRET_KEYS: ${MCP_CONNECTION_SECRET_KEYS:?set MCP_CONNECTION_SECRET_KEYS in .env}
+      MCP_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MCP_PUBLIC_URL: https://${PUBLIC_HOST:-localhost}/mcp
+      MCP_OAUTH_ISSUER: https://${PUBLIC_HOST:-localhost}/auth/realms/sql-data-layer
+      # The signing keys are fetched over the internal network, not through the public address.
+      MCP_OAUTH_JWKS_URL: http://keycloak:8080/auth/realms/sql-data-layer/protocol/openid-connect/certs
+    volumes:
+      - sampledata:/data:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  gui-backend:
+    <<: *service
+    build: { context: ., dockerfile: gui-backend/Dockerfile }
+    environment:
+      GUI_APP_META_URL: postgresql+asyncpg://gui_app:${GUI_APP_PASSWORD}@postgres:5432/app_meta
+      GUI_CONNECTION_SECRET_KEYS: ${MCP_CONNECTION_SECRET_KEYS}
+      GUI_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      GUI_OAUTH_ISSUER: https://${PUBLIC_HOST:-localhost}/auth/realms/sql-data-layer
+      GUI_OAUTH_AUDIENCE: https://${PUBLIC_HOST:-localhost}/api
+      GUI_OAUTH_JWKS_URL: http://keycloak:8080/auth/realms/sql-data-layer/protocol/openid-connect/certs
+      GUI_MCP_HEALTH_URL: http://mcp-server:8000/healthz
+    volumes:
+      - sampledata:/data:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  gui-frontend:
+    <<: *service
+    build: { context: gui-frontend }
+    environment:
+      OIDC_AUTHORITY: https://${PUBLIC_HOST:-localhost}/auth/realms/sql-data-layer
+      OIDC_CLIENT_ID: gui
+
+  caddy:
+    <<: *service
+    image: caddy:2-alpine
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - gui-frontend
+      - gui-backend
+      - mcp-server
+      - keycloak
+
+  # --- demo only (profile "demo"): sample users and the two sample databases -------------------------
+
+  # alice (admin), bob (analyst), carol (viewer), with KEYCLOAK_DEV_USER_PASSWORD, plus a client
+  # that automated tests use to get tokens. Never enable this profile in production.
+  demo-users:
+    profiles: [demo]
+    build: { context: ., dockerfile: deploy/setup.Dockerfile }
+    command: ["python", "deploy/keycloak/bootstrap_dev.py"]
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_DEV_USER_PASSWORD: ${KEYCLOAK_DEV_USER_PASSWORD:?set KEYCLOAK_DEV_USER_PASSWORD in .env}
+      MCP_AUDIENCE: https://${PUBLIC_HOST:-localhost}/mcp
+      GUI_AUDIENCE: https://${PUBLIC_HOST:-localhost}/api
+    depends_on:
+      keycloak-setup: { condition: service_completed_successfully }
+    restart: "no"
+
+  # Registers the sample Postgres and SQLite databases and lets the "analyst" role query them.
+  demo-registry:
+    profiles: [demo]
+    build: { context: ., dockerfile: mcp-server/Dockerfile }
+    user: "0"  # writes the sample SQLite file into the shared volume
+    command:
+      - sh
+      - -c
+      - python /sample_data/build_sqlite.py /data/sample.sqlite && python -m mcp_sql_server.devtools.seed
+    environment:
+      APP_META_MIGRATIONS_URL: postgresql+asyncpg://meta_owner:${META_OWNER_PASSWORD}@postgres:5432/app_meta
+      MCP_CONNECTION_SECRET_KEYS: ${MCP_CONNECTION_SECRET_KEYS}
+      ORG_READONLY_PASSWORD: ${ORG_READONLY_PASSWORD}
+      SEED_POSTGRES_HOST: postgres
+      SEED_SQLITE_PATH: /data/sample.sqlite
+    volumes:
+      - ./db/sample_data:/sample_data:ro
+      - sampledata:/data
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
+volumes:
+  pgdata:
+  sampledata:
+  caddydata:
+  caddyconfig:

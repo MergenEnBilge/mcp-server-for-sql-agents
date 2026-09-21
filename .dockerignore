@@ -1,0 +1,20 @@
+# Nothing secret or bulky goes into an image: .env stays on the host and reaches containers
+# only through the compose file's `environment`.
+.git
+.env
+.env.*
+!.env.example
+**/.venv
+**/venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+**/dist
+**/test-results
+**/playwright-report
+tests
+docs
+db/sample_data/*.sqlite

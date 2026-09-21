@@ -1,2 +1,5 @@
 # Shell scripts run inside Linux containers; CRLF line endings break them.
 *.sh text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
+*.conf text eol=lf

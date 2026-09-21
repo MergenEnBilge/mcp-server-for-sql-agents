@@ -209,7 +209,9 @@ def _main() -> None:
     load_dotenv(root / ".env")
     engine = create_async_engine(os.environ["APP_META_MIGRATIONS_URL"])
     secret_box = SecretBox(os.environ["MCP_CONNECTION_SECRET_KEYS"])
-    sqlite_path = root / "db" / "sample_data" / "sample.sqlite"
+    sqlite_path = Path(
+        os.environ.get("SEED_SQLITE_PATH") or root / "db" / "sample_data" / "sample.sqlite"
+    )
 
     async def run() -> None:
         try:
@@ -219,7 +221,8 @@ def _main() -> None:
                 postgres=PostgresTarget(
                     # 127.0.0.1, not "localhost": on Windows the latter tries IPv6 first, and
                     # Docker's published ports are IPv4 only, so every connection would stall.
-                    host="127.0.0.1",
+                    # Inside the compose network, SEED_POSTGRES_HOST names the postgres service.
+                    host=os.environ.get("SEED_POSTGRES_HOST", "127.0.0.1"),
                     port=int(os.environ.get("POSTGRES_PORT", "5432")),
                     database="org_data",
                     username="org_readonly",

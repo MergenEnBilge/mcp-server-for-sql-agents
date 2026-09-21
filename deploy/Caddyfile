@@ -1,0 +1,43 @@
+# The single front door. TLS is terminated here and everything is one origin, so the browser app
+# needs no CORS and the identity provider, API and MCP server all share one public hostname.
+#
+# For localhost, Caddy issues a certificate from its own local CA (your browser will warn until you
+# trust it). For a real hostname, set PUBLIC_HOST and Caddy gets a public certificate on its own.
+{$PUBLIC_HOST:localhost} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Identity provider (Keycloak lives under /auth).
+	handle /auth/* {
+		reverse_proxy keycloak:8080
+	}
+
+	# Admin API.
+	handle /api/* {
+		reverse_proxy gui-backend:8100
+	}
+
+	# MCP over Streamable HTTP, plus the OAuth discovery documents that clients look for.
+	# flush_interval -1 sends server-sent events as they happen instead of buffering them.
+	handle /mcp* {
+		reverse_proxy mcp-server:8000 {
+			flush_interval -1
+		}
+	}
+	handle /.well-known/* {
+		reverse_proxy mcp-server:8000
+	}
+
+	# Everything else is the admin console (a single-page app).
+	handle {
+		header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		header X-Frame-Options "DENY"
+		reverse_proxy gui-frontend:8080
+	}
+}

@@ -122,7 +122,9 @@ def main() -> None:
             },
         ).raise_for_status()
         scopes = {s["name"]: s["id"] for s in kc.get("/client-scopes").json()}
-    kc.put(f"/default-default-client-scopes/{scopes['mcp-audience']}").raise_for_status()
+    default = kc.put(f"/default-default-client-scopes/{scopes['mcp-audience']}")
+    if default.status_code != 409:  # 409 means it already is a default: nothing to do
+        default.raise_for_status()
 
     if structure_only:
         print(f"Keycloak realm '{REALM}' structure ready (audience scope for MCP clients).")

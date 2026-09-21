@@ -12,6 +12,9 @@
 #   org_owner      loads the sample data (dev only; a real target DB already exists)
 #   org_readonly   what run_query connects as: SELECT only, on org_data only
 #
+# When KEYCLOAK_DB_PASSWORD is set (the full docker-compose.yml), a `keycloak` role and database
+# are created too, so the identity provider keeps its data in this same server.
+#
 # Table-level grants on app_meta are made by the Alembic migrations, not here.
 set -euo pipefail
 
@@ -50,6 +53,14 @@ ALTER ROLE org_readonly SET default_transaction_read_only = on;
 ALTER ROLE org_readonly SET statement_timeout = '10s';
 ALTER ROLE org_readonly SET idle_in_transaction_session_timeout = '15s';
 SQL
+
+if [ -n "${KEYCLOAK_DB_PASSWORD:-}" ]; then
+  "${PSQL[@]}" --username "$POSTGRES_USER" --dbname postgres     -v keycloak_pw="$KEYCLOAK_DB_PASSWORD" <<'SQL'
+CREATE ROLE keycloak LOGIN PASSWORD :'keycloak_pw';
+CREATE DATABASE keycloak OWNER keycloak;
+REVOKE CONNECT, TEMPORARY ON DATABASE keycloak FROM PUBLIC;
+SQL
+fi
 
 # Sample data is loaded as org_owner so that org_owner (not the superuser) owns
 # the tables. Local socket connections are trusted during first-run init.
