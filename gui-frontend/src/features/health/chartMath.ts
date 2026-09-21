@@ -10,6 +10,13 @@ export function niceCeil(max: number): number {
   return 10 * magnitude;
 }
 
+/** The top of an axis for counts: like `niceCeil`, but never odd (above 1), so the halfway
+ * gridline is a whole number. Nobody makes 2.5 calls. */
+export function wholeCeil(max: number): number {
+  const top = niceCeil(max);
+  return top > 1 && top % 2 === 1 ? top + 1 : top;
+}
+
 /** Gridline values for an axis from 0 to `top`: 0, half, top. */
 export function axisTicks(top: number): number[] {
   return top === 1 ? [0, 1] : [0, top / 2, top];

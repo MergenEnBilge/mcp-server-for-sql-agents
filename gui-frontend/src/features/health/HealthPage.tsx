@@ -123,6 +123,7 @@ export function HealthPage() {
               ]}
               format={(v) => v.toLocaleString("en-GB")}
               timeLabel={label}
+              whole
               dimmed={health.loading}
             />
             <TimeSeries

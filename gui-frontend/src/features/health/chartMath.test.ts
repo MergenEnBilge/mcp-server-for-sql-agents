@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { axisTicks, formatMs, formatRate, nearestIndex, niceCeil, runs } from "./chartMath";
+import { axisTicks, formatMs, formatRate, nearestIndex, niceCeil, runs, wholeCeil } from "./chartMath";
 
 describe("chart math", () => {
   it("rounds an axis maximum up to a clean number", () => {
@@ -11,6 +11,14 @@ describe("chart math", () => {
     expect(niceCeil(21)).toBe(50);
     expect(niceCeil(340)).toBe(500);
     expect(niceCeil(0.3)).toBeCloseTo(0.5);
+  });
+
+  it("keeps the halfway line on a whole number for counts", () => {
+    expect(wholeCeil(5)).toBe(6);
+    expect(axisTicks(wholeCeil(5))).toEqual([0, 3, 6]);
+    expect(wholeCeil(1)).toBe(1);
+    expect(wholeCeil(20)).toBe(20);
+    expect(wholeCeil(0)).toBe(1);
   });
 
   it("puts gridlines at zero, half and the top", () => {

@@ -106,6 +106,7 @@
 @media (max-width: 860px) {
   .app {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr; /* the rail keeps its own height instead of sharing the spare space */
   }
   .rail {
     position: static;
@@ -113,7 +114,9 @@
   }
   .rail-nav {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
+    align-items: flex-start;
     padding: 0 8px 8px;
   }
   .rail-nav a {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
-import { axisTicks, nearestIndex, niceCeil, runs } from "./chartMath";
+import { axisTicks, nearestIndex, niceCeil, runs, wholeCeil } from "./chartMath";
 
 export interface SeriesDef {
   label: string;
@@ -41,6 +41,7 @@ export function TimeSeries({
   series,
   format,
   timeLabel,
+  whole = false,
   dimmed = false,
 }: {
   title: string;
@@ -50,6 +51,8 @@ export function TimeSeries({
   series: SeriesDef[];
   format: (value: number) => string;
   timeLabel: (iso: string) => string;
+  /** The values are counts, so gridlines fall on whole numbers. */
+  whole?: boolean;
   dimmed?: boolean;
 }) {
   const [wrapRef, width] = useWidth();
@@ -61,7 +64,7 @@ export function TimeSeries({
   const innerH = HEIGHT - MARGIN.top - MARGIN.bottom;
   const totals = times.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0));
   const peak = kind === "columns" ? Math.max(0, ...totals) : Math.max(0, ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
-  const top = niceCeil(peak);
+  const top = whole ? wholeCeil(peak) : niceCeil(peak);
   const x = (i: number) => MARGIN.left + ((i + 0.5) * innerW) / Math.max(1, n);
   const y = (v: number) => MARGIN.top + innerH * (1 - v / top);
   const slot = innerW / Math.max(1, n);
