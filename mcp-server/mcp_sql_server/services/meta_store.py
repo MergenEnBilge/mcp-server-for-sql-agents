@@ -137,6 +137,14 @@ _NOTE_SUBJECT = """
             display_name = COALESCE(EXCLUDED.display_name, known_subjects.display_name)
 """
 
+
+# Roles every Keycloak user carries (default-roles-<realm>, offline_access, uma_authorization).
+# Nobody grants access to them, so listing them only buries the roles that matter in the grids.
+# They still count for authorization; they just aren't offered as rows.
+def _is_builtin_role(role: str) -> bool:
+    return role in ("offline_access", "uma_authorization") or role.startswith("default-roles-")
+
+
 _WRITE_AUDIT = """
     INSERT INTO audit_log (caller_sub, caller_name, tool_name, connection_name, tables,
                            arguments, success, error_message, row_count, result_summary,
@@ -228,7 +236,9 @@ class PostgresMetaStore(MetaStore):
         """Remember the caller and their roles so the admin GUI can offer them in permission
         grids. The identity provider owns the real user list; this is a convenience copy."""
         subjects = [("user", entry.caller_sub, entry.caller_name)]
-        subjects += [("role", role, None) for role in entry.caller_roles]
+        subjects += [
+            ("role", role, None) for role in entry.caller_roles if not _is_builtin_role(role)
+        ]
         for subject_type, subject_id, name in subjects:
             await conn.execute(
                 text(_NOTE_SUBJECT),

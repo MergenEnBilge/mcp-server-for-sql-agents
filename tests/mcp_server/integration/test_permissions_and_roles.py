@@ -219,3 +219,24 @@ async def test_callers_and_their_roles_are_remembered_for_the_admin_grids(stack)
         ("user", caller.sub, "Seen Person"),
         ("role", role, None),
     ]
+
+
+async def test_the_identity_providers_built_in_roles_are_not_offered_as_grid_rows(stack):
+    caller = Caller(
+        sub=f"u-{uuid4().hex[:6]}",
+        roles=frozenset({"default-roles-shop", "offline_access", "uma_authorization", "finance"}),
+    )
+    with pytest.raises(ToolNotPermitted):
+        await stack.schema.list_connections(caller)
+
+    async with stack.admin.connect() as db:
+        roles = (
+            await db.execute(
+                text(
+                    "SELECT subject_id FROM known_subjects WHERE subject_type = 'role' "
+                    "AND subject_id IN ('default-roles-shop', 'offline_access', "
+                    "'uma_authorization', 'finance')"
+                )
+            )
+        ).scalars()
+        assert set(roles) == {"finance"}
