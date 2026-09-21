@@ -6,7 +6,9 @@ import { Shell } from "./components/Shell";
 import { ErrorNote } from "./components/ui";
 import { AuditPage } from "./features/audit/AuditPage";
 import { ConnectionsPage } from "./features/connections/ConnectionsPage";
+import { HealthPage } from "./features/health/HealthPage";
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
+import { ReportsPage } from "./features/reports/ReportsPage";
 import { SchemaPage } from "./features/schema/SchemaPage";
 
 /** The routes, for an already signed-in person. Tests render this with their own providers. */
@@ -19,6 +21,8 @@ export function AppRoutes() {
         <Route path="permissions" element={<PermissionsPage />} />
         <Route path="connections" element={<ConnectionsPage />} />
         <Route path="schema" element={<SchemaPage />} />
+        <Route path="health" element={<HealthPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="*" element={<Navigate to="/audit" replace />} />
       </Route>
     </Routes>

@@ -867,3 +867,178 @@ h3.section {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* ---------- health ---------- */
+
+.readings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin: 0 0 22px;
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
+}
+
+.reading {
+  padding: 10px 14px 12px 0;
+  margin-right: 14px;
+  border-right: 1px solid var(--rule);
+}
+
+.reading:last-child {
+  border-right: 0;
+}
+
+.reading dt {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.reading dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.reading dd .muted {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.reading .detail-line {
+  margin-top: 3px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.charts {
+  display: grid;
+  gap: 22px;
+  margin-bottom: 26px;
+}
+
+h2.section-title {
+  margin: 0 0 8px;
+}
+
+.chart {
+  position: relative;
+  margin: 0;
+}
+
+.chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+}
+
+.chart-title {
+  font-weight: 600;
+}
+
+.chart .legend {
+  display: inline-flex;
+  gap: 12px;
+  margin-left: 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.chart .legend svg {
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.chart figcaption .btn {
+  margin-left: auto;
+}
+
+.chart.dimmed .chart-plot {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.chart-plot {
+  position: relative;
+  width: 100%;
+}
+
+.chart-plot svg {
+  display: block;
+  max-width: 100%;
+}
+
+.tone-ink {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+.tone-quiet {
+  fill: var(--mark);
+  stroke: var(--mark);
+}
+
+.tone-fault {
+  fill: var(--fault);
+  stroke: var(--fault);
+}
+
+rect[class^="tone-"] {
+  stroke: none;
+}
+
+polyline[class^="tone-"] {
+  fill: none;
+}
+
+circle.ring {
+  stroke: var(--paper);
+  stroke-width: 2px;
+}
+
+.grid-line {
+  stroke: var(--rule);
+  stroke-width: 1px;
+}
+
+.crosshair {
+  stroke: var(--rule-strong);
+  stroke-width: 1px;
+}
+
+.axis-text {
+  fill: var(--ink-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-label {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  padding: 6px 9px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.tooltip .tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tooltip strong {
+  font-variant-numeric: tabular-nums;
+}

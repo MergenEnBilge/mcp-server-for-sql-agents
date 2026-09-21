@@ -7,6 +7,7 @@
   --ink-2: #4f5d68; /* secondary text: 6.6:1 on paper */
   --rule: #c8d0d2;
   --rule-strong: #8f9ea6;
+  --mark: #667883; /* quiet data marks: 4.6:1 on paper */
 
   /* meaning: never used decoratively */
   --live: #0a7559; /* currently in effect */
