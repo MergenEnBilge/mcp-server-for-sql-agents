@@ -44,5 +44,25 @@ services:
       timeout: 3s
       retries: 10
 
+  # The identity provider. Sign-in for the admin console and the MCP server's OAuth 2.1 flow.
+  # The realm (roles, the GUI client, audience scopes) is imported from deploy/keycloak; sample
+  # users are added by deploy/keycloak/bootstrap_dev.py so no passwords live in the repo.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}/auth
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./deploy/keycloak/sql-data-layer-realm.json:/opt/keycloak/data/import/sql-data-layer-realm.json:ro
+      - keycloakdata:/opt/keycloak/data
+
 volumes:
   pgdata:
+  keycloakdata:
